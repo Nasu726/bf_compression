@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'experiments/profile_quad_backend_calls.py'
+      - 'experiments/profile_hex_specialized_kernels.py'
       - '.github/workflows/quad-operation-profile.yml'
   workflow_dispatch:
 
@@ -39,7 +40,16 @@ jobs:
           for name, row in list(a['methods'].items())[:20]:
               print(name, row['calls'], row['bytes'], row['movement'])
           PY
+      - name: Profile specialized stride-66 kernels
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          python experiments/profile_hex_specialized_kernels.py \
+            > results/tmp/hex_specialized_profile.json
+          cat results/tmp/hex_specialized_profile.json
       - uses: actions/upload-artifact@v4
         with:
-          name: quad-operation-profile
-          path: results/tmp/quad_backend_profile.json
+          name: source-attribution-profile
+          path: |
+            results/tmp/quad_backend_profile.json
+            results/tmp/hex_specialized_profile.json
