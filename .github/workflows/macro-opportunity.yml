@@ -186,9 +186,40 @@ jobs:
           print(f'loop_kinds balanced={balanced_loops} moving={moving_loops} dynamic={dynamic_loops}')
           PY
 
+      - name: Profile physical movement-distance modes
+        run: |
+          python experiments/profile_move_distance_histogram.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_move_distances.json
+          python - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+
+          rows = json.loads(Path('results/tmp/compiler_move_distances.json').read_text())
+          for context in ('static', 'periodic', 'dynamic'):
+              mass = Counter()
+              runs = Counter()
+              for row in rows:
+                  for item in row[context]['top_absolute_by_byte_mass']:
+                      d = item['distance']
+                      mass[d] += item['movement_bytes']
+                      runs[d] += item['runs']
+              print(context)
+              for d, byte_mass in mass.most_common(20):
+                  print(f'  distance={d}: runs={runs[d]}, movement_bytes={byte_mass}')
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: macro-opportunity
           path: |
             results/tmp/compiler_macro_structure.json
             results/tmp/compiler_layout_headroom.json
+            results/tmp/compiler_move_distances.json
