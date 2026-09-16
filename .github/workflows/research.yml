@@ -197,6 +197,19 @@ jobs:
             --json > results/tmp/compiler_known_clear.json
           cat results/tmp/compiler_known_clear.json
 
+      - name: Profile exact-entry affine loop summaries
+        run: |
+          python experiments/profile_exact_loop_summary.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_exact_loop_summary.json
+          cat results/tmp/compiler_exact_loop_summary.json
+
       - name: Differentially verify string/conversion artifacts
         env:
           PYTHONPATH: translator_string/pybf
