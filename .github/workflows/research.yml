@@ -1,0 +1,58 @@
+name: research
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  region-zero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify region-zero transformations
+        run: python experiments/verify_region_zero.py
+
+      - name: Profile hand-written corpus
+        run: python experiments/profile_region_zero.py corpus/*.bf
+
+      - name: Check out compiler corpus source
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: main
+          path: translator
+
+      - name: Generate real compiler-produced BF
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program, partition_program_size_breakdown
+
+          code = build_partition_program()
+          Path('results/tmp/compiler_partition.bf').write_text(code, encoding='ascii')
+          print(f'compiler_partition_bytes={len(code)}')
+          print(f'compiler_partition_breakdown={partition_program_size_breakdown()}')
+          PY
+
+      - name: Profile compiler-produced BF
+        run: |
+          python experiments/profile_regions.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_regions.json
+          python experiments/profile_region_zero.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_region_zero.json
+          cat results/tmp/compiler_region_zero.json
+
+      - name: Upload research outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-zero-research
+          path: |
+            results/tmp/compiler_partition.bf
+            results/tmp/compiler_regions.json
+            results/tmp/compiler_region_zero.json
