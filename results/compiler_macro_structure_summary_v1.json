@@ -1,0 +1,90 @@
+{
+  "artifacts": [
+    {
+      "bf_bytes": 363109,
+      "movement_bytes": 332812,
+      "movement_bytes_in_long_runs": {"4": 327155, "8": 320823, "16": 306305, "32": 265312, "64": 199849, "128": 8305},
+      "movement_run_count": 12402,
+      "movement_run_max": 320,
+      "name": "compiler_partition",
+      "semantic_free_reroll_saved_bytes": 3,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 176320
+    },
+    {
+      "bf_bytes": 297843,
+      "movement_bytes": 279227,
+      "movement_bytes_in_long_runs": {"4": 269740, "8": 264978, "16": 255916, "32": 247060, "64": 247060, "128": 242305},
+      "movement_run_count": 8085,
+      "movement_run_max": 1884,
+      "name": "compiler_abc153_stream",
+      "semantic_free_reroll_saved_bytes": 0,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 218458
+    },
+    {
+      "bf_bytes": 430146,
+      "movement_bytes": 413875,
+      "movement_bytes_in_long_runs": {"4": 405132, "8": 403519, "16": 400474, "32": 397522, "64": 397522, "128": 391610},
+      "movement_run_count": 8319,
+      "movement_run_max": 1284,
+      "name": "compiler_char_runtime_store",
+      "semantic_free_reroll_saved_bytes": 3,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 155785
+    },
+    {
+      "bf_bytes": 38200,
+      "movement_bytes": 34909,
+      "movement_bytes_in_long_runs": {"4": 32584, "8": 32550, "16": 32494, "32": 32494, "64": 32494, "128": 32494},
+      "movement_run_count": 2405,
+      "movement_run_max": 536,
+      "name": "compiler_direct_join_input",
+      "semantic_free_reroll_saved_bytes": 3,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 8892
+    },
+    {
+      "bf_bytes": 341636,
+      "movement_bytes": 316910,
+      "movement_bytes_in_long_runs": {"4": 308088, "8": 295319, "16": 293605, "32": 288815, "64": 270940, "128": 222683},
+      "movement_run_count": 9749,
+      "movement_run_max": 1025,
+      "name": "compiler_string_to_int",
+      "semantic_free_reroll_saved_bytes": 3,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 109614
+    },
+    {
+      "bf_bytes": 401007,
+      "movement_bytes": 356000,
+      "movement_bytes_in_long_runs": {"4": 330543, "8": 316935, "16": 313403, "32": 310451, "64": 310451, "128": 307008},
+      "movement_run_count": 25621,
+      "movement_run_max": 627,
+      "name": "compiler_int_to_string",
+      "semantic_free_reroll_saved_bytes": 63,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 244034
+    },
+    {
+      "bf_bytes": 194381,
+      "movement_bytes": 172914,
+      "movement_bytes_in_long_runs": {"4": 165701, "8": 151428, "16": 146822, "32": 139096, "64": 121221, "128": 77933},
+      "movement_run_count": 8104,
+      "movement_run_max": 372,
+      "name": "compiler_direct_int_input",
+      "semantic_free_reroll_saved_bytes": 0,
+      "semantic_loop_dictionary_upper_bound_duplicate_bytes": 75898
+    }
+  ],
+  "suite": {
+    "arithmetic_bytes": 79512,
+    "bf_bytes": 2066322,
+    "control_bytes": 80062,
+    "io_bytes": 101,
+    "literal_free_reroll_saved_bytes": 75,
+    "literal_loop_dictionary_upper_bound_duplicate_bytes": 987920,
+    "movement_bytes": 1906647,
+    "movement_bytes_in_long_runs": {"4": 1838943, "8": 1785552, "16": 1749019, "32": 1680750, "64": 1579537, "128": 1282338},
+    "movement_run_count": 74685,
+    "movement_run_max": 1884,
+    "one_step_per_move_run_oracle_bytes": 234360,
+    "semantic_free_reroll_saved_bytes": 75,
+    "semantic_loop_dictionary_upper_bound_duplicate_bytes": 989001,
+    "ten_x_target_bytes": 206632
+  }
+}
