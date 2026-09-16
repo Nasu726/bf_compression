@@ -17,6 +17,9 @@ jobs:
       - name: Verify region-zero transformations
         run: python experiments/verify_region_zero.py
 
+      - name: Verify exact-value clear shortening
+        run: python experiments/verify_known_clear.py
+
       - name: Profile hand-written corpus
         run: python experiments/profile_region_zero.py corpus/*.bf
 
@@ -180,6 +183,19 @@ jobs:
             results/tmp/compiler_direct_int_input.bf \
             --json > results/tmp/compiler_region_zero_ablation.json
           cat results/tmp/compiler_region_zero_ablation.json
+
+      - name: Measure exact-value clear shortening
+        run: |
+          python experiments/known_clear_opt.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_known_clear.json
+          cat results/tmp/compiler_known_clear.json
 
       - name: Differentially verify string/conversion artifacts
         env:
