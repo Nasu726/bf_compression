@@ -1,0 +1,30 @@
+{
+  "date": "2026-09-17",
+  "hexlane_decimal_print": {
+    "workflow_run": 35138973625,
+    "verification_cases": 14,
+    "verified_values_include": ["0", "1", "10", "2^63-1", "-2^63", "-1", "-123456789"],
+    "quad_print_raw_bytes": 177704,
+    "hexlane_print_raw_bytes": 18734,
+    "raw_ratio": 0.10542250033764013,
+    "quad_constant_optimized_bytes": 178229,
+    "hexlane_constant_optimized_bytes": 18920,
+    "constant_optimized_ratio": 0.10615556390935257,
+    "hexlane_movement_bytes": 14742,
+    "hexlane_movement_fraction": 0.7869114978114657,
+    "temporary_record_stride": 25,
+    "temporary_chain_cells": 525,
+    "max_verified_runtime_steps": 1913458
+  },
+  "stored_prefix_runtime_lane_add": {
+    "workflow_run": 35139025497,
+    "verification_cases": 25,
+    "old_add_kernel_bytes": 9853,
+    "runtime_lane_destructive_kernel_bytes": 2730,
+    "source_ratio": 0.277073,
+    "max_verified_runtime_steps": 20258,
+    "precondition": "In the stored-prefix reader, DATA is dead after adding into TOTAL and LEFT is scratch; the transform consumes DATA and uses LEFT lanes as traversal-marker/carry state.",
+    "postcondition": "TOTAL=(old TOTAL+old DATA) mod 2^64; DATA=0; LEFT=0; ANS/BACK/MARKER unchanged."
+  },
+  "interpretation": "Two independent vertical slices now validate the same 10x design principle: retain a dense radix representation but encode fixed-width digit work as runtime moving loops rather than Python-unrolled source. Decimal output, previously the largest generic backend emitter, falls to about 10.5% of the Quad source in standalone comparison."
+}
