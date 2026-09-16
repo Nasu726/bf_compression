@@ -40,8 +40,11 @@ def main() -> None:
     optimized, stats = same("+[->+>+<<]>>[-]<[-]<")
     assert stats["pruned_target_updates"] == 2, (optimized, stats)
 
-    # Nested lexical scopes are transformed recursively.
-    optimized, stats = same("+[[->+<]>[-]<-]")
+    # Nested lexical scopes are transformed recursively.  Keep the enclosing
+    # loop terminating so full final-state differential comparison is meaningful:
+    # cell 0 counts two outer iterations; each iteration creates a one-shot
+    # transfer on cells 1->2 and then clears cell 2 before returning to cell 0.
+    optimized, stats = same("++[>+[->+<]>[-]<<-]")
     assert stats["pruned_target_updates"] >= 1, (optimized, stats)
 
     # A moving loop starts a fresh relative frame; a later local transfer/clear
