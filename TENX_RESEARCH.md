@@ -102,4 +102,72 @@ This exposes a major 10x research direction:
 4. periodic-frame compaction for the highly regular stride-2/3/7/66 moving loops;
 5. only after those, attack the remaining dynamic scans and executable-dictionary opportunity.
 
-The next experiment must quantify the tradeoff before implementation: how much source routing would disappear if persistent 99-cell Quad values became 8-cell packed values, versus how much BF source is added by packing/unpacking around arithmetic operations.
+## 2026-09-17 — Guarded scalar benchmark and the marker+nibble radix-16 result
+
+### Benchmark correction: zero-tape folding can invalidate primitive measurements
+
+A first representation microbenchmark emitted standalone operations over the normal zero-initialized BF tape. This made some copy/add snippets appear to optimize to zero bytes: the existing `bfopt` correctly proved that their uninitialized source operands were zero and erased the operation.
+
+Those zero-byte results were benchmark artifacts, not representation wins. The corrected benchmark prefixes every persistent operand/output cell with input `,` so its state is unknown, optimizes both the guard-only program and guard+operation program, and reports the difference:
+
+`optimized(unknown-state guard + operation) - optimized(guard only)`.
+
+This is still a microbenchmark rather than a full-program integration result, but it prevents known-zero propagation from deleting the operation under test.
+
+### Corrected baseline: Quad64 and Base4
+
+At `Python_to_BF_Translator` revision `6dcc60c1d38b92be901acc4383a158d254c1ecda`:
+
+| representation | cells/int64 | copy | add | sub | unsigned >= | set const |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Quad64 | 99 | 2,084 | 6,354 | 8,797 | 13,222 | 412 |
+| Base4 | 66 | 1,161 | 2,987 | 2,992 | 4,622 | 268 |
+| HexLane | 34 | **617** | **2,371** | **2,388** | **3,950** | **228** |
+| dense Hex16 | 16 + 4 shared scratch | 6,266 | 42,500 | 42,795 | 25,388 | **198** |
+
+All byte counts are guarded incremental standard-BF source bytes after the existing optimizer.
+
+Base4 remains genuinely better than Quad after correcting the benchmark. Its improvement was not an artifact of zero-tape facts.
+
+### Negative result: plain 16-cell radix-16 arithmetic
+
+`experiments/hex16_scalar_core.py` stores an int64 in sixteen little-endian nibble cells and uses four shared scratch cells. Eight differential BF executions cover all-word carry, all-word borrow, nibble boundaries, sign-bit boundaries, and patterned values; they pass.
+
+The representation is spatially excellent but source-size poor for general arithmetic because each of the sixteen nibble operations is Python-unrolled into the emitted BF. Add grows to 42,500 bytes and subtraction to 42,795 bytes. Dense storage alone therefore does not solve the source-size problem.
+
+This is an important design constraint for the 10x track: the arithmetic representation needs both high information density and a runtime traversal mechanism so the per-digit operation body is emitted once.
+
+### Marker+nibble HexLane
+
+`experiments/hexlane_scalar_core.py` combines the two useful properties:
+
+- sixteen radix-16 value nibbles;
+- one temporary traversal marker beside each nibble;
+- one sentinel lane;
+- total physical width: **34 cells/int64**;
+- hot arithmetic emitted as one fixed lane body executed sixteen times at runtime.
+
+The bounded 0..31 radix mapper uses the existing threshold idea from the compiler's hexadecimal kernels: after the sixteenth unit, carry is known to be one and the remaining 0..15 total can be transferred directly rather than emitting another fifteen nested tests.
+
+Eight independent differential BF cases pass for add, subtract, unsigned comparison, preservation of inputs, and restoration of all marker cells to zero.
+
+HexLane is Pareto-better than Base4 on this measured primitive set: it uses about 51.5% as many persistent cells and emits less source for every measured operation. Relative to Quad64, guarded source ratios are:
+
+- copy: 0.2961;
+- add: 0.3732;
+- subtract: 0.2715;
+- unsigned >=: 0.2987;
+- set constant: 0.5534.
+
+Machine-readable result: `results/scalar_representation_guarded_v1.json`.
+
+### Interpretation and next test
+
+HexLane becomes the current scalar representation candidate for the 10x track. It does **not** establish a whole-program improvement yet. The generic compiler still needs operations not present in the prototype, including shifts, signed comparisons, truthiness/equality helpers, decimal I/O, and packed/list conversion paths.
+
+The next work is therefore opportunity-directed rather than a blind backend rewrite:
+
+1. instrument the existing compiler to attribute emitted bytes to top-level Quad operations and determine which missing primitives actually dominate the generic artifacts;
+2. measure the hot kernels in the specialized stride-66 hexadecimal sequence separately, because those programs do not use the generic Quad scalar path in the same way;
+3. integrate HexLane first where the measured coverage is high enough to justify the missing operations;
+4. require complete-artifact source-size and differential correctness results before treating the microbenchmark ratios as realized compression.
