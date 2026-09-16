@@ -122,21 +122,25 @@ jobs:
 
           rows = json.loads(Path('results/tmp/compiler_macro_structure.json').read_text())
           total = sum(r['bf_bytes'] for r in rows)
+          canonical = sum(r['canonical_ast_bytes'] for r in rows)
           movement = sum(r['movement_bytes'] for r in rows)
           arithmetic = sum(r['arithmetic_bytes'] for r in rows)
           control = sum(r['control_bytes'] for r in rows)
           io = sum(r['io_bytes'] for r in rows)
-          literal = sum(r['literal_reroll']['greedy_ideal_saved_bytes'] for r in rows)
-          semantic = sum(r['semantic_reroll']['greedy_ideal_saved_bytes'] for r in rows)
+          literal_cost = sum(r['literal_reroll']['optimistic_result_bytes_if_free_reroll'] for r in rows)
+          semantic_cost = sum(r['semantic_reroll']['optimistic_result_bytes_if_free_reroll'] for r in rows)
+          literal_saved = canonical - literal_cost
+          semantic_saved = canonical - semantic_cost
           print(f'total={total}')
+          print(f'canonical={canonical}')
           print(f'movement={movement} ({movement/total:.4%})')
           print(f'arithmetic={arithmetic} ({arithmetic/total:.4%})')
           print(f'control={control} ({control/total:.4%})')
           print(f'io={io} ({io/total:.4%})')
-          print(f'literal_free_reroll_saved={literal} ({literal/total:.4%})')
-          print(f'literal_free_reroll_result={total-literal}')
-          print(f'semantic_free_reroll_saved={semantic} ({semantic/total:.4%})')
-          print(f'semantic_free_reroll_result={total-semantic}')
+          print(f'literal_free_reroll_saved={literal_saved} ({literal_saved/total:.4%})')
+          print(f'literal_free_reroll_result={literal_cost}')
+          print(f'semantic_free_reroll_saved={semantic_saved} ({semantic_saved/total:.4%})')
+          print(f'semantic_free_reroll_result={semantic_cost}')
           print(f'10x_target={total//10}')
           PY
 
