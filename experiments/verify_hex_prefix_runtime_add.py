@@ -24,7 +24,7 @@ def read_hex(memory: list[int], base: int) -> int:
     return sum((memory[base + i] & 0xF) << (4 * i) for i in range(HEX_DIGITS))
 
 
-def build_runtime_case(data: int, total: int) -> tuple[str, int, int, list[int]]:
+def build_runtime_case(data: int, total: int) -> tuple[str, int, list[int], str]:
     bf = BFEmitter()
     # Sentinel values ensure unrelated record state is untouched.
     bf.set_const(MARKER, 7)
@@ -63,7 +63,7 @@ def main() -> None:
     for data, total in cases:
         code, steps, memory, output = build_runtime_case(data, total)
         max_steps = max(max_steps, steps)
-        assert output == b""
+        assert output == ""
         assert read_hex(memory, TOTAL) == (data + total) & MASK64
         assert read_hex(memory, DATA) == 0
         assert all(memory[LEFT + i] == 0 for i in range(HEX_DIGITS))
