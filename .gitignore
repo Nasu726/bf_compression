@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+corpus/downloaded/
+results/tmp/
+results/nested_tables.pkl
