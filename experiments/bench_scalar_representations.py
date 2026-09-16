@@ -23,6 +23,11 @@ from bfpacked64 import PackedI64Core, PackedI64Ref
 from bfquad import Quad64Core, Quad64Ref, WORD_CELLS as QUAD_CELLS
 from bfbase4 import Base4I64Core, Base4I64Ref, WORD_CELLS as BASE4_CELLS
 from hex16_scalar_core import Hex16I64Core, Hex16I64Ref, WORD_CELLS as HEX16_CELLS
+from hexlane_scalar_core import (
+    HexLaneI64Core,
+    HexLaneI64Ref,
+    WORD_CELLS as HEXLANE_CELLS,
+)
 
 
 def _unknown(bf: BFEmitter, cells: Iterable[int]) -> None:
@@ -35,8 +40,6 @@ def measured(
     build: Callable[[BFEmitter], None],
     guard: Callable[[BFEmitter], None],
 ) -> dict[str, int]:
-    # Raw body is still useful because representation emitters are themselves
-    # the source-size machinery under study.
     body = BFEmitter()
     build(body)
     raw_body = body.code()
@@ -88,6 +91,21 @@ def base4_refs():
 
 def base4_cells(ref: Base4I64Ref) -> list[int]:
     return [ref.value(i) for i in range(32)]
+
+
+def hexlane_refs():
+    gap = HEXLANE_CELLS + 1
+    return (
+        HexLaneI64Ref(0),
+        HexLaneI64Ref(gap),
+        HexLaneI64Ref(2 * gap),
+        HexLaneI64Ref(3 * gap),
+        4 * gap,
+    )
+
+
+def hexlane_cells(ref: HexLaneI64Ref) -> list[int]:
+    return [ref.value(i) for i in range(16)]
 
 
 def hex16_refs():
@@ -181,6 +199,44 @@ def bench_base4() -> dict[str, object]:
         "set_const": measured(
             lambda bf: core(bf).set_u64(dst, 0xFEDCBA9876543210),
             lambda bf: _unknown(bf, base4_cells(dst)),
+        ),
+    }
+
+
+def bench_hexlane() -> dict[str, object]:
+    a, b, dst, tmp, result = hexlane_refs()
+    core = lambda bf: HexLaneI64Core(bf)
+    return {
+        "word_cells": HEXLANE_CELLS,
+        "copy": measured(
+            lambda bf: core(bf).copy64(dst, a),
+            lambda bf: _unknown(bf, hexlane_cells(a) + hexlane_cells(dst)),
+        ),
+        "add": measured(
+            lambda bf: core(bf).add64(dst, a, b),
+            lambda bf: _unknown(
+                bf, hexlane_cells(a) + hexlane_cells(b) + hexlane_cells(dst)
+            ),
+        ),
+        "sub": measured(
+            lambda bf: core(bf).sub64(dst, a, b),
+            lambda bf: _unknown(
+                bf, hexlane_cells(a) + hexlane_cells(b) + hexlane_cells(dst)
+            ),
+        ),
+        "uge": measured(
+            lambda bf: core(bf).uge64(result, a, b, tmp),
+            lambda bf: _unknown(
+                bf,
+                hexlane_cells(a)
+                + hexlane_cells(b)
+                + hexlane_cells(tmp)
+                + [result],
+            ),
+        ),
+        "set_const": measured(
+            lambda bf: core(bf).set_u64(dst, 0xFEDCBA9876543210),
+            lambda bf: _unknown(bf, hexlane_cells(dst)),
         ),
     }
 
@@ -287,10 +343,12 @@ def main() -> None:
     rows = {
         "quad64": bench_quad(),
         "base4": bench_base4(),
+        "hexlane": bench_hexlane(),
         "hex16": bench_hex16(),
         "packed_at_rest": bench_packed_at_rest(),
     }
     rows["base4_vs_quad"] = comparison(rows, "base4")
+    rows["hexlane_vs_quad"] = comparison(rows, "hexlane")
     rows["hex16_vs_quad"] = comparison(rows, "hex16")
     print(json.dumps(rows, indent=2, sort_keys=True))
 
