@@ -191,11 +191,22 @@ def _new_stats() -> dict[str, Any]:
         "balanced_loops_emitted": 0,
         "removed_by_origin": {},
         "removed_bytes_by_origin": {},
+        "removed_by_loop_kind": {},
+        "removed_bytes_by_loop_kind": {},
     }
 
 
 def _bump(mapping: dict[str, int], key: str, amount: int = 1) -> None:
     mapping[key] = mapping.get(key, 0) + amount
+
+
+def _loop_kind(body: tuple[object, ...]) -> str:
+    delta = body_static_delta(body)
+    if delta is None:
+        return "dynamic"
+    if delta == 0:
+        return "balanced"
+    return "moving"
 
 
 def _optimize_sequence(
@@ -262,11 +273,15 @@ def _optimize_sequence(
         cur = value_at(logical_ptr)
         if cur == 0:
             origin = origin_at(logical_ptr) or "known_zero"
-            loop_bytes = 2 + len(stringify(node.body))
+            original_body = canonicalize(node.body)
+            kind = _loop_kind(original_body)
+            loop_bytes = 2 + len(stringify(original_body))
             stats["removed_known_zero_loops"] += 1
             stats["removed_known_zero_loop_bytes"] += loop_bytes
             _bump(stats["removed_by_origin"], origin)
             _bump(stats["removed_bytes_by_origin"], origin, loop_bytes)
+            _bump(stats["removed_by_loop_kind"], kind)
+            _bump(stats["removed_bytes_by_loop_kind"], kind, loop_bytes)
             continue
 
         # Body-local simplification is safe with an unknown iteration-entry
