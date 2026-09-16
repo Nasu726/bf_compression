@@ -22,6 +22,10 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_hex16_scalar.py
+      - name: Verify marker-nibble radix-16 scalar semantics
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_hexlane_scalar.py
       - name: Compare scalar representations
         env:
           PYTHONPATH: translator/pybf:experiments
