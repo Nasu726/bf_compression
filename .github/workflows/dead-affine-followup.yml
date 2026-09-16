@@ -110,7 +110,7 @@ jobs:
           Path('results/tmp/compiler_char_runtime_store.expected').write_text('abcXef\n', encoding='ascii')
           PY
 
-      - name: Measure combined optimizer
+      - name: Measure one combined cycle
         run: |
           python experiments/dead_affine_target_opt.py \
             results/tmp/compiler_partition.bf \
@@ -136,15 +136,15 @@ jobs:
             --json > results/tmp/compiler_combined_fixedpoint.json
           cat results/tmp/compiler_combined_fixedpoint.json
 
-      - name: Differentially verify partition combined pass
+      - name: Differentially verify partition fixed point
         env:
           PYTHONPATH: translator/pybf
         run: |
           python experiments/verify_compiler_partition.py \
             results/tmp/compiler_partition.bf \
-            --optimizer region-zero-dead-affine
+            --optimizer region-zero-dead-affine-fixedpoint
 
-      - name: Differentially verify ABC153 combined pass
+      - name: Differentially verify ABC153 fixed point
         env:
           PYTHONPATH: translator_dynamic/pybf
         run: |
@@ -153,9 +153,9 @@ jobs:
             --input-file results/tmp/compiler_abc153_stream.in \
             --expected-file results/tmp/compiler_abc153_stream.expected \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine
+            --optimizer region-zero-dead-affine-fixedpoint
 
-      - name: Differentially verify string/conversion combined pass
+      - name: Differentially verify string/conversion fixed point
         env:
           PYTHONPATH: translator_string/pybf
         run: |
@@ -164,27 +164,27 @@ jobs:
             --input-file results/tmp/compiler_char_runtime_store.in \
             --expected-file results/tmp/compiler_char_runtime_store.expected \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine & p1=$!
+            --optimizer region-zero-dead-affine-fixedpoint & p1=$!
           python experiments/verify_external_artifact.py \
             results/tmp/compiler_direct_join_input.bf \
             --input-file results/tmp/compiler_direct_join_input.in \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine & p2=$!
+            --optimizer region-zero-dead-affine-fixedpoint & p2=$!
           python experiments/verify_external_artifact.py \
             results/tmp/compiler_string_to_int.bf \
             --input-file results/tmp/compiler_string_to_int.in \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine & p3=$!
+            --optimizer region-zero-dead-affine-fixedpoint & p3=$!
           python experiments/verify_external_artifact.py \
             results/tmp/compiler_int_to_string.bf \
             --input-file results/tmp/compiler_int_to_string.in \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine & p4=$!
+            --optimizer region-zero-dead-affine-fixedpoint & p4=$!
           python experiments/verify_external_artifact.py \
             results/tmp/compiler_direct_int_input.bf \
             --input-file results/tmp/compiler_direct_int_input.in \
             --memory-size 300000 \
-            --optimizer region-zero-dead-affine & p5=$!
+            --optimizer region-zero-dead-affine-fixedpoint & p5=$!
           wait "$p1"
           wait "$p2"
           wait "$p3"
@@ -198,4 +198,4 @@ jobs:
           path: |
             results/tmp/compiler_region_zero_dead_affine.json
             results/tmp/compiler_combined_fixedpoint.json
-            results/tmp/*.region-zero-dead-affine.bf
+            results/tmp/*.region-zero-dead-affine-fixedpoint.bf
