@@ -20,14 +20,14 @@ jobs:
       - name: Profile hand-written corpus
         run: python experiments/profile_region_zero.py corpus/*.bf
 
-      - name: Check out compiler corpus source
+      - name: Check out compiler main
         uses: actions/checkout@v4
         with:
           repository: Nasu726/Python_to_BF_Translator
-          ref: main
+          ref: 0851b624364013041faa001db55cf9b90447cdef
           path: translator
 
-      - name: Generate real compiler-produced BF
+      - name: Generate partition compiler artifact
         env:
           PYTHONPATH: translator/pybf
         run: |
@@ -42,23 +42,130 @@ jobs:
           print(f'compiler_partition_breakdown={partition_program_size_breakdown()}')
           PY
 
-      - name: Profile compiler-produced BF
+      - name: Profile partition compiler artifact
         run: |
           python experiments/profile_regions.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_regions.json
           python experiments/profile_region_zero.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_region_zero.json
           cat results/tmp/compiler_region_zero.json
 
-      - name: Differentially verify compiler-produced BF
+      - name: Differentially verify partition compiler artifact
         env:
           PYTHONPATH: translator/pybf
         run: python experiments/verify_compiler_partition.py results/tmp/compiler_partition.bf
+
+      - name: Check out streaming-list compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+
+      - name: Generate ABC153 streaming compiler artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - name: Profile ABC153 streaming compiler artifact
+        run: |
+          python experiments/profile_region_zero.py results/tmp/compiler_abc153_stream.bf --json > results/tmp/compiler_abc153_stream_region_zero.json
+          cat results/tmp/compiler_abc153_stream_region_zero.json
+
+      - name: Differentially verify ABC153 streaming compiler artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_abc153_stream.bf \
+            --input-file results/tmp/compiler_abc153_stream.in \
+            --expected-file results/tmp/compiler_abc153_stream.expected \
+            --memory-size 300000
+
+      - name: Check out string-conversion compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+
+      - name: Generate string/conversion compiler artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              code = compile_source(dedent(source))
+              Path(f'results/tmp/compiler_{name}.bf').write_text(code, encoding='ascii')
+              print(f'{name}_bytes={len(code)}')
+
+          Path('results/tmp/compiler_char_runtime_store.in').write_text('abcdef\n3\n', encoding='ascii')
+          Path('results/tmp/compiler_char_runtime_store.expected').write_text('abcXef\n', encoding='ascii')
+          PY
+
+      - name: Profile string/conversion compiler artifacts
+        run: |
+          python experiments/profile_region_zero.py \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_string_region_zero.json
+          cat results/tmp/compiler_string_region_zero.json
+
+      - name: Differentially verify runtime character-store artifact
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_char_runtime_store.bf \
+            --input-file results/tmp/compiler_char_runtime_store.in \
+            --expected-file results/tmp/compiler_char_runtime_store.expected \
+            --memory-size 120000
 
       - name: Upload research outputs
         uses: actions/upload-artifact@v4
         with:
           name: region-zero-research
           path: |
+            results/tmp/*.json
+            results/tmp/*.expected
             results/tmp/compiler_partition.bf
             results/tmp/compiler_partition.region-zero.bf
-            results/tmp/compiler_regions.json
-            results/tmp/compiler_region_zero.json
+            results/tmp/compiler_abc153_stream.bf
+            results/tmp/compiler_abc153_stream.region-zero.bf
+            results/tmp/compiler_char_runtime_store.bf
+            results/tmp/compiler_char_runtime_store.region-zero.bf
