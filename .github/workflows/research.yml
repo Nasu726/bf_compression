@@ -131,7 +131,16 @@ jobs:
               Path(f'results/tmp/compiler_{name}.bf').write_text(code, encoding='ascii')
               print(f'{name}_bytes={len(code)}')
 
-          Path('results/tmp/compiler_char_runtime_store.in').write_text('abcdef\n3\n', encoding='ascii')
+          inputs = {
+              'char_runtime_store': 'abcdef\n3\n',
+              'direct_join_input': 'abcdef\n',
+              'string_to_int': '123\n',
+              'int_to_string': '123\n',
+              'direct_int_input': '123\n',
+          }
+          for name, data in inputs.items():
+              Path(f'results/tmp/compiler_{name}.in').write_text(data, encoding='ascii')
+
           Path('results/tmp/compiler_char_runtime_store.expected').write_text('abcXef\n', encoding='ascii')
           PY
 
@@ -172,7 +181,7 @@ jobs:
             --json > results/tmp/compiler_region_zero_ablation.json
           cat results/tmp/compiler_region_zero_ablation.json
 
-      - name: Differentially verify runtime character-store artifact
+      - name: Differentially verify string/conversion artifacts
         env:
           PYTHONPATH: translator_string/pybf
         run: |
@@ -180,7 +189,28 @@ jobs:
             results/tmp/compiler_char_runtime_store.bf \
             --input-file results/tmp/compiler_char_runtime_store.in \
             --expected-file results/tmp/compiler_char_runtime_store.expected \
-            --memory-size 120000
+            --memory-size 300000 & p1=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_direct_join_input.bf \
+            --input-file results/tmp/compiler_direct_join_input.in \
+            --memory-size 300000 & p2=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_string_to_int.bf \
+            --input-file results/tmp/compiler_string_to_int.in \
+            --memory-size 300000 & p3=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_int_to_string.bf \
+            --input-file results/tmp/compiler_int_to_string.in \
+            --memory-size 300000 & p4=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_direct_int_input.bf \
+            --input-file results/tmp/compiler_direct_int_input.in \
+            --memory-size 300000 & p5=$!
+          wait "$p1"
+          wait "$p2"
+          wait "$p3"
+          wait "$p4"
+          wait "$p5"
 
       - name: Upload research outputs
         uses: actions/upload-artifact@v4
