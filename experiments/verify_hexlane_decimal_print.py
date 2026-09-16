@@ -24,7 +24,7 @@ def run_case(value: int) -> tuple[int, int]:
     print_hexlane_s64_compact(bf, ref, workspace_base=40)
     code = optimize_bf(bf.code())
     result = run_bf(code, memory_size=700, step_limit=300_000_000)
-    expected = str(signed64(value)).encode()
+    expected = str(signed64(value))
     assert result.output == expected, (value, result.output, expected)
 
     decoded = sum((result.memory[ref.value(i)] & 0xF) << (4 * i) for i in range(16))
