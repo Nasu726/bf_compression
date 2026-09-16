@@ -17,6 +17,9 @@ jobs:
       - name: Verify synthetic dead-target rewrites
         run: python experiments/verify_dead_affine_target_opt.py
 
+      - name: Verify dead straight-write opportunity logic
+        run: python experiments/verify_dead_straight_writes.py
+
       - name: Check out compiler main
         uses: actions/checkout@v4
         with:
@@ -191,6 +194,19 @@ jobs:
           wait "$p4"
           wait "$p5"
 
+      - name: Profile residual dead straight writes at fixed point
+        run: |
+          python experiments/profile_dead_straight_writes.py \
+            results/tmp/compiler_partition.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_abc153_stream.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_char_runtime_store.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_direct_join_input.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_string_to_int.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_int_to_string.region-zero-dead-affine-fixedpoint.bf \
+            results/tmp/compiler_direct_int_input.region-zero-dead-affine-fixedpoint.bf \
+            --json > results/tmp/compiler_dead_straight_writes.json
+          cat results/tmp/compiler_dead_straight_writes.json
+
       - name: Upload combined research outputs
         uses: actions/upload-artifact@v4
         with:
@@ -198,4 +214,5 @@ jobs:
           path: |
             results/tmp/compiler_region_zero_dead_affine.json
             results/tmp/compiler_combined_fixedpoint.json
+            results/tmp/compiler_dead_straight_writes.json
             results/tmp/*.region-zero-dead-affine-fixedpoint.bf
