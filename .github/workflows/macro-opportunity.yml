@@ -144,7 +144,51 @@ jobs:
           print(f'10x_target={total//10}')
           PY
 
+      - name: Profile tape-layout headroom
+        run: |
+          python experiments/profile_layout_headroom.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_layout_headroom.json
+          cat results/tmp/compiler_layout_headroom.json
+
+      - name: Summarize layout contexts and routing caps
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = json.loads(Path('results/tmp/compiler_layout_headroom.json').read_text())
+          total = sum(r['canonical_bytes'] for r in rows)
+          movement = sum(r['movement_bytes'] for r in rows)
+          nonmovement = sum(r['nonmovement_bytes'] for r in rows)
+          runs = sum(r['movement_run_count'] for r in rows)
+          print(f'total={total}')
+          print(f'movement={movement} ({movement/total:.4%})')
+          print(f'nonmovement={nonmovement}')
+          print(f'movement_runs={runs}')
+          for context in ('static', 'periodic', 'dynamic'):
+              m = sum(r['contexts'][context]['movement_bytes'] for r in rows)
+              c = sum(r['contexts'][context]['movement_run_count'] for r in rows)
+              print(f'{context}_movement={m} ({m/movement:.4%} of movement), runs={c}')
+          for cap in ('1', '2', '4', '8', '16', '32'):
+              result = sum(r['capped_run_oracles'][cap]['result_bytes'] for r in rows)
+              moves = sum(r['capped_run_oracles'][cap]['movement_bytes'] for r in rows)
+              print(f'cap{cap}_movement={moves}; cap{cap}_result={result}')
+          moving_loops = sum(r['loop_kinds'].get('moving', 0) for r in rows)
+          dynamic_loops = sum(r['loop_kinds'].get('dynamic', 0) for r in rows)
+          balanced_loops = sum(r['loop_kinds'].get('balanced', 0) for r in rows)
+          print(f'loop_kinds balanced={balanced_loops} moving={moving_loops} dynamic={dynamic_loops}')
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: macro-opportunity
-          path: results/tmp/compiler_macro_structure.json
+          path: |
+            results/tmp/compiler_macro_structure.json
+            results/tmp/compiler_layout_headroom.json
