@@ -1,0 +1,146 @@
+name: macro-opportunity
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify macro profiler
+        run: python experiments/verify_macro_structure.py
+
+      - name: Check out compiler main
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator
+
+      - name: Generate partition artifact
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program
+          Path('results/tmp/compiler_partition.bf').write_text(
+              build_partition_program(), encoding='ascii'
+          )
+          PY
+
+      - name: Check out streaming-list compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+
+      - name: Generate ABC153 streaming artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - name: Check out string-conversion compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+
+      - name: Generate string/conversion artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              Path(f'results/tmp/compiler_{name}.bf').write_text(
+                  compile_source(dedent(source)), encoding='ascii'
+              )
+          PY
+
+      - name: Profile macro structure
+        run: |
+          python experiments/profile_macro_structure.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_macro_structure.json
+          cat results/tmp/compiler_macro_structure.json
+
+      - name: Summarize 10x headroom
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = json.loads(Path('results/tmp/compiler_macro_structure.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          movement = sum(r['movement_bytes'] for r in rows)
+          arithmetic = sum(r['arithmetic_bytes'] for r in rows)
+          control = sum(r['control_bytes'] for r in rows)
+          io = sum(r['io_bytes'] for r in rows)
+          literal = sum(r['literal_reroll']['greedy_ideal_saved_bytes'] for r in rows)
+          semantic = sum(r['semantic_reroll']['greedy_ideal_saved_bytes'] for r in rows)
+          print(f'total={total}')
+          print(f'movement={movement} ({movement/total:.4%})')
+          print(f'arithmetic={arithmetic} ({arithmetic/total:.4%})')
+          print(f'control={control} ({control/total:.4%})')
+          print(f'io={io} ({io/total:.4%})')
+          print(f'literal_free_reroll_saved={literal} ({literal/total:.4%})')
+          print(f'literal_free_reroll_result={total-literal}')
+          print(f'semantic_free_reroll_saved={semantic} ({semantic/total:.4%})')
+          print(f'semantic_free_reroll_result={total-semantic}')
+          print(f'10x_target={total//10}')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macro-opportunity
+          path: results/tmp/compiler_macro_structure.json
