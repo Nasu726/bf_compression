@@ -103,6 +103,14 @@ def main() -> None:
     same(">[-]<")
     same("+++[+][-]")
 
+    # Recursive dataflow matters even when the whole program is balanced.
+    # The first inner clear proves the second inner clear unreachable/no-op on
+    # every executed outer iteration. The legacy optimizer only propagates at
+    # top level, so this is the smallest representative of that missed class.
+    nested = "+[[-][-]]"
+    assert optimize_region_zero(nested) == "+[[-]]"
+    same(nested)
+
     # A moving loop is a local address barrier, but on every terminating path
     # its exit cell is known zero. The following clear is therefore redundant.
     for n in range(1, 8):
