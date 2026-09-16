@@ -23,6 +23,22 @@
     "rewritten_known_clears": 0,
     "status": "negative result; keep as research evidence rather than Level-1 baseline"
   },
+  "followup_exact_entry_affine_summary": {
+    "description": "After Level 1, profile flat pointer-balanced arithmetic loops whose control cell has an exact nonzero 8-bit entry value; solve c*k = -x (mod 256) and estimate a straight-line equivalent.",
+    "profitable_candidates": 18,
+    "estimated_incremental_saved_bytes": 36,
+    "estimated_incremental_percent_of_level1_output": 0.0018517461194345385,
+    "per_artifact_estimated_saved_bytes": {
+      "partition": 12,
+      "abc153_stream_n8_mixed": 10,
+      "char_runtime_store_join": 4,
+      "direct_join_input": 0,
+      "string_to_int": 2,
+      "int_to_string": 4,
+      "direct_int_input": 4
+    },
+    "status": "near-negative opportunity profile; do not implement broad exact-entry affine resynthesis now"
+  },
   "artifacts": [
     {
       "name": "partition",
@@ -132,6 +148,7 @@
     "Ablation attributes 53,891 saved bytes to shallow relative-region dataflow and an additional 68,320 bytes to recursive loop-body dataflow. Which side dominates varies strongly by artifact, so neither should be discarded.",
     "Representative full-state differential checks now cover all seven compiler-generated artifacts: output, input consumption, final pointer, and full memory match between baseline and region-zero output.",
     "The exact-value clear-shortening follow-up found zero eligible profitable clears after region-zero across all seven artifacts.",
+    "Exact-entry affine summary profiling found only 18 profitable candidates with 36 estimated bytes of total incremental saving, about 0.00185% of Level-1 output; broad exact-entry loop resynthesis is not justified by this corpus.",
     "The four compact hand-written corpus programs still save zero bytes, so compiler-generated and hand-written BF should remain separate benchmark classes."
   ]
 }
