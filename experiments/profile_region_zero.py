@@ -30,6 +30,8 @@ def profile(path: Path) -> dict:
         "removed_bytes_by_origin": stats["removed_bytes_by_origin"],
         "removed_by_loop_kind": stats["removed_by_loop_kind"],
         "removed_bytes_by_loop_kind": stats["removed_bytes_by_loop_kind"],
+        "original_loop_kinds": stats["original_loop_kinds"],
+        "loop_kind_transitions": stats["loop_kind_transitions"],
     }
 
 
@@ -50,7 +52,8 @@ def main() -> None:
                 f"({row['saved_percent_vs_canonical']:.3f}%) "
                 f"removed_loops={row['removed_known_zero_loops']:,} "
                 f"origins={row['removed_by_origin']} "
-                f"kinds={row['removed_by_loop_kind']}"
+                f"kinds={row['removed_by_loop_kind']} "
+                f"transitions={row['loop_kind_transitions']}"
             )
 
 
