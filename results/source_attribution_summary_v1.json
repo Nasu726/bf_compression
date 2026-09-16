@@ -1,0 +1,53 @@
+{
+  "translator_revision": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+  "workflow_run": 35138053156,
+  "generic_six_case_suite": {
+    "raw_bytes": 1679119,
+    "optimized_bytes": 1678267,
+    "attributed_backend_bytes": 1473735,
+    "attributed_fraction_of_raw": 0.877681145291081,
+    "top_methods_by_raw_emission": {
+      "print_s64": {"calls": 3, "bytes": 363941, "movement": 315716},
+      "copy_cell": {"calls": 97, "bytes": 236451, "movement": 234996},
+      "slt64": {"calls": 3, "bytes": 165260, "movement": 164138},
+      "read_packed_s64_line_token": {"calls": 3, "bytes": 151974, "movement": 144054},
+      "_eq_byte_const": {"calls": 14, "bytes": 106463, "movement": 105471},
+      "copy64": {"calls": 19, "bytes": 103690, "movement": 93834},
+      "_quad_to_decimal_bytes": {"calls": 1, "bytes": 99701, "movement": 88124},
+      "add64": {"calls": 4, "bytes": 55009, "movement": 54113},
+      "sub64": {"calls": 2, "bytes": 53513, "movement": 53003},
+      "_neg64_inplace": {"calls": 2, "bytes": 29469, "movement": 28021},
+      "_set_line_end": {"calls": 3, "bytes": 26011, "movement": 25798},
+      "_inc64_inplace": {"calls": 2, "bytes": 24027, "movement": 22639},
+      "sge64": {"calls": 1, "bytes": 18128, "movement": 17783},
+      "drain_to_line_end": {"calls": 3, "bytes": 15210, "movement": 14907}
+    }
+  },
+  "specialized_partition": {
+    "record_stride": 66,
+    "optimized_program_bytes": 363109,
+    "cumulative_raw": {
+      "read_n_and_values": 244014,
+      "reverse_total": 246392,
+      "partition_and_output": 364477
+    },
+    "kernels": {
+      "counted_prefix_record_body": {
+        "bytes": 188482,
+        "movement": 176148,
+        "movement_fraction": 0.9345613904776053
+      },
+      "partition_prefix_body_extent6": {
+        "bytes": 72916,
+        "movement": 65664,
+        "movement_fraction": 0.9005430906796862
+      },
+      "add_data_to_total": {
+        "bytes": 9853,
+        "movement": 8174,
+        "movement_fraction": 0.8295950471937481
+      }
+    }
+  },
+  "interpretation": "The generic path is the larger global opportunity, but its dominant emission is decimal I/O, byte copying and comparison rather than add/sub alone. The specialized stride-66 path independently exhibits the same routing pathology: its hot record bodies are over 90% pointer movement. HexLane integration must therefore extend through I/O and helper operations, while specialized lane-major kernels remain a useful parallel experiment."
+}
