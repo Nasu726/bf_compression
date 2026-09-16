@@ -2,20 +2,23 @@ from __future__ import annotations
 
 """Profile macro-scale compression opportunity in compiler-generated BF.
 
-This experiment is intentionally optimistic.  It asks whether exact or
-semantically normalized *tandem repetition* is abundant enough to justify an
-executable-rerolling research track capable of order-of-magnitude source-size
-reduction.
+This experiment asks whether exact or semantically normalized tandem repetition
+is abundant enough to justify executable rerolling as a route toward roughly
+10x source-size reduction.
 
-Important: the reported reroll savings are NOT immediately valid rewrites.
-They ignore scratch-counter placement, counter setup/update cost, and wrapper
-routing.  They therefore act as a structural upper bound / triage signal:
-if even this optimistic bound is small, executable rerolling alone cannot
-explain a 10x target.
+The reroll result is deliberately optimistic: scratch-counter placement,
+counter synthesis/update, and wrapper routing are treated as free.  It is
+therefore a structural triage bound, not an immediately valid rewrite.
 
-The scanner is near-linear for a fixed period budget: O(n * P), where n is the
-number of normalized atoms and P is the number of tested atom periods.  It does
-not enumerate arbitrary substring pairs.
+Nested opportunities are composed without double counting.  A loop body is
+profiled recursively first; only its remaining ideal cost is exposed as one
+atom to the enclosing static region.  If the enclosing region then rerolls
+several copies, it removes the already-compressed cost of the discarded copies.
+Thus no original byte is credited twice.
+
+For a fixed period budget the tandem scan is O(n * P), where n is normalized
+atom count and P is the number of tested atom periods.  It does not enumerate
+arbitrary substring pairs.
 """
 
 import argparse
@@ -45,7 +48,7 @@ PERIODS = tuple(range(1, 129)) + (192, 256, 384, 512)
 @dataclass(frozen=True)
 class Atom:
     key: Hashable
-    source_bytes: int
+    effective_bytes: int
     pointer_delta: int
 
 
@@ -76,98 +79,34 @@ def _loop_key(body: tuple[object, ...], *, semantic: bool) -> Hashable:
     return ("LOOP_LITERAL", stringify(body))
 
 
-def _flush_run(
-    atoms: list[Atom],
-    kind: str | None,
-    amount: int,
-    source_bytes: int,
-) -> tuple[str | None, int, int]:
-    if kind is None:
-        return None, 0, 0
-    if kind == "MOVE":
-        if amount:
-            atoms.append(Atom(("MOVE", amount), source_bytes, amount))
-    elif kind == "ADD":
-        z = amount & 255
-        if z:
-            signed = z if z <= 128 else z - 256
-            atoms.append(Atom(("ADD", signed), source_bytes, 0))
-    else:
-        raise AssertionError(kind)
-    return None, 0, 0
+def _new_stats() -> dict[str, Any]:
+    return {
+        "regions": 0,
+        "atoms": 0,
+        "candidate_starts": 0,
+        "greedy_repeat_effective_bytes": 0,
+        "outer_reroll_saved_bytes": 0,
+        "max_repeat_count": 1,
+        "max_period_atoms": 0,
+        "max_single_candidate_saved_bytes": 0,
+    }
 
 
-def atomize_sequence(
-    nodes: tuple[object, ...],
-    *,
-    semantic: bool,
-    regions: list[list[Atom]],
-) -> None:
-    """Split one lexical scope at moving/dynamic loops and atomize static regions."""
-    atoms: list[Atom] = []
-    run_kind: str | None = None
-    run_amount = 0
-    run_bytes = 0
-
-    def flush() -> None:
-        nonlocal run_kind, run_amount, run_bytes
-        run_kind, run_amount, run_bytes = _flush_run(
-            atoms, run_kind, run_amount, run_bytes
-        )
-
-    def finish_region() -> None:
-        flush()
-        if atoms:
-            regions.append(list(atoms))
-            atoms.clear()
-
-    for node in nodes:
-        if node in (">", "<"):
-            if run_kind != "MOVE":
-                flush()
-                run_kind = "MOVE"
-            run_amount += 1 if node == ">" else -1
-            run_bytes += 1
-            continue
-        if node in ("+", "-"):
-            if run_kind != "ADD":
-                flush()
-                run_kind = "ADD"
-            run_amount += 1 if node == "+" else -1
-            run_bytes += 1
-            continue
-
-        flush()
-        if node in (".", ","):
-            atoms.append(Atom(("IO", node), 1, 0))
-            continue
-        if not isinstance(node, Loop):
-            raise AssertionError(node)
-
-        body = canonicalize(node.body)
-        delta = body_static_delta(body)
-        if delta == 0:
-            atoms.append(
-                Atom(
-                    _loop_key(body, semantic=semantic),
-                    2 + len(stringify(body)),
-                    0,
-                )
-            )
-        else:
-            # Absolute identity is no longer static across this loop.  Keep it
-            # out of a reroll candidate but recurse into its lexical body.
-            finish_region()
-            atomize_sequence(body, semantic=semantic, regions=regions)
-
-    finish_region()
-
-    # Balanced loop bodies are analyzable lexical scopes in their own right.
-    for node in nodes:
-        if isinstance(node, Loop):
-            body = canonicalize(node.body)
-            if body_static_delta(body) == 0:
-                atomize_sequence(body, semantic=semantic, regions=regions)
+def _merge_stats(dst: dict[str, Any], src: dict[str, Any]) -> None:
+    for key in (
+        "regions",
+        "atoms",
+        "candidate_starts",
+        "greedy_repeat_effective_bytes",
+        "outer_reroll_saved_bytes",
+    ):
+        dst[key] += src[key]
+    for key in (
+        "max_repeat_count",
+        "max_period_atoms",
+        "max_single_candidate_saved_bytes",
+    ):
+        dst[key] = max(dst[key], src[key])
 
 
 def _intern_ids(atoms: list[Atom]) -> list[int]:
@@ -182,25 +121,21 @@ def _intern_ids(atoms: list[Atom]) -> list[int]:
     return ids
 
 
-def profile_region(atoms: list[Atom]) -> dict[str, Any]:
+def _profile_region(atoms: list[Atom]) -> tuple[int, dict[str, Any]]:
+    """Return optimistic remaining bytes and non-overlapping region stats."""
+    stats = _new_stats()
+    stats["regions"] = 1
+    stats["atoms"] = len(atoms)
+    total = sum(a.effective_bytes for a in atoms)
     n = len(atoms)
     if n < 2:
-        return {
-            "atoms": n,
-            "source_bytes": sum(a.source_bytes for a in atoms),
-            "candidate_starts": 0,
-            "greedy_repeat_bytes": 0,
-            "greedy_ideal_saved_bytes": 0,
-            "max_repeat_count": 1,
-            "max_period_atoms": 0,
-            "max_single_candidate_saved_bytes": 0,
-        }
+        return total, stats
 
     ids = _intern_ids(atoms)
     byte_prefix = [0] * (n + 1)
     ptr_prefix = [0] * (n + 1)
     for i, atom in enumerate(atoms):
-        byte_prefix[i + 1] = byte_prefix[i] + atom.source_bytes
+        byte_prefix[i + 1] = byte_prefix[i] + atom.effective_bytes
         ptr_prefix[i + 1] = ptr_prefix[i] + atom.pointer_delta
 
     best_saved = [0] * n
@@ -208,14 +143,11 @@ def profile_region(atoms: list[Atom]) -> dict[str, Any]:
     best_k = [1] * n
     best_p = [0] * n
     max_p = min(n // 2, PERIODS[-1])
-
-    # lcp[i] = number of equal atoms from i and i+p onward.  For fixed p this
-    # is computed by one reverse scan, making the whole search O(n * |PERIODS|).
     lcp = [0] * (n + 1)
+
     for p in PERIODS:
         if p > max_p:
             break
-        # Only indices with i+p < n are meaningful.
         for i in range(n - p - 1, -1, -1):
             if ids[i] == ids[i + p]:
                 lcp[i] = lcp[i + 1] + 1
@@ -223,8 +155,8 @@ def profile_region(atoms: list[Atom]) -> dict[str, Any]:
                 lcp[i] = 0
             if lcp[i] < p:
                 continue
-            # A rerolled body must return to its entry pointer.  Nested loops in
-            # a region are themselves recursively balanced by construction.
+            # The repeated body must return to its entry pointer.  Every loop
+            # atom admitted to a region is recursively pointer-balanced.
             if ptr_prefix[i + p] != ptr_prefix[i]:
                 continue
             k = 1 + lcp[i] // p
@@ -234,8 +166,8 @@ def profile_region(atoms: list[Atom]) -> dict[str, Any]:
                 end = i + k * p
             if k < 2:
                 continue
-            # Optimistic: keep the first body copy and remove all later copies.
-            # Counter/scratch/wrapper cost is deliberately ignored.
+            # Free-wrapper upper bound: retain the first already-compressed
+            # body and remove every later already-compressed copy.
             saved = byte_prefix[end] - byte_prefix[i + p]
             if saved > best_saved[i]:
                 best_saved[i] = saved
@@ -243,35 +175,124 @@ def profile_region(atoms: list[Atom]) -> dict[str, Any]:
                 best_k[i] = k
                 best_p[i] = p
 
-    candidate_starts = sum(1 for x in best_saved if x > 0)
-    greedy_saved = 0
-    greedy_repeat_bytes = 0
-    max_k = 1
-    max_period = 0
-    max_single = 0
+    stats["candidate_starts"] = sum(1 for x in best_saved if x > 0)
     i = 0
     while i < n:
         if best_saved[i] <= 0:
             i += 1
             continue
         end = best_end[i]
-        greedy_saved += best_saved[i]
-        greedy_repeat_bytes += byte_prefix[end] - byte_prefix[i]
-        max_k = max(max_k, best_k[i])
-        max_period = max(max_period, best_p[i])
-        max_single = max(max_single, best_saved[i])
+        saved = best_saved[i]
+        stats["outer_reroll_saved_bytes"] += saved
+        stats["greedy_repeat_effective_bytes"] += byte_prefix[end] - byte_prefix[i]
+        stats["max_repeat_count"] = max(stats["max_repeat_count"], best_k[i])
+        stats["max_period_atoms"] = max(stats["max_period_atoms"], best_p[i])
+        stats["max_single_candidate_saved_bytes"] = max(
+            stats["max_single_candidate_saved_bytes"], saved
+        )
         i = end
 
-    return {
-        "atoms": n,
-        "source_bytes": byte_prefix[n],
-        "candidate_starts": candidate_starts,
-        "greedy_repeat_bytes": greedy_repeat_bytes,
-        "greedy_ideal_saved_bytes": greedy_saved,
-        "max_repeat_count": max_k,
-        "max_period_atoms": max_period,
-        "max_single_candidate_saved_bytes": max_single,
-    }
+    return total - stats["outer_reroll_saved_bytes"], stats
+
+
+def _append_run(
+    atoms: list[Atom],
+    kind: str | None,
+    amount: int,
+    source_bytes: int,
+) -> None:
+    if kind is None:
+        return
+    if kind == "MOVE":
+        if amount:
+            atoms.append(Atom(("MOVE", amount), source_bytes, amount))
+        return
+    if kind == "ADD":
+        z = amount & 255
+        if z:
+            signed = z if z <= 128 else z - 256
+            atoms.append(Atom(("ADD", signed), source_bytes, 0))
+        return
+    raise AssertionError(kind)
+
+
+def _profile_sequence(
+    nodes: tuple[object, ...],
+    *,
+    semantic: bool,
+) -> tuple[int, dict[str, Any]]:
+    """Recursively compose inner compression and enclosing tandem rerolling."""
+    total_cost = 0
+    stats = _new_stats()
+    atoms: list[Atom] = []
+    run_kind: str | None = None
+    run_amount = 0
+    run_bytes = 0
+
+    def flush_run() -> None:
+        nonlocal run_kind, run_amount, run_bytes
+        _append_run(atoms, run_kind, run_amount, run_bytes)
+        run_kind = None
+        run_amount = 0
+        run_bytes = 0
+
+    def finish_region() -> None:
+        nonlocal total_cost
+        flush_run()
+        if not atoms:
+            return
+        remaining, region_stats = _profile_region(atoms)
+        total_cost += remaining
+        _merge_stats(stats, region_stats)
+        atoms.clear()
+
+    for node in nodes:
+        if node in (">", "<"):
+            if run_kind != "MOVE":
+                flush_run()
+                run_kind = "MOVE"
+            run_amount += 1 if node == ">" else -1
+            run_bytes += 1
+            continue
+        if node in ("+", "-"):
+            if run_kind != "ADD":
+                flush_run()
+                run_kind = "ADD"
+            run_amount += 1 if node == "+" else -1
+            run_bytes += 1
+            continue
+
+        flush_run()
+        if node in (".", ","):
+            atoms.append(Atom(("IO", node), 1, 0))
+            continue
+        if not isinstance(node, Loop):
+            raise AssertionError(node)
+
+        body = canonicalize(node.body)
+        child_cost, child_stats = _profile_sequence(body, semantic=semantic)
+        _merge_stats(stats, child_stats)
+        delta = body_static_delta(body)
+        if delta == 0:
+            # Internal compression is already reflected in child_cost.  The
+            # enclosing region may now remove whole repeated loop instances,
+            # but only their remaining cost, avoiding double counting.
+            atoms.append(
+                Atom(
+                    _loop_key(body, semantic=semantic),
+                    2 + child_cost,
+                    0,
+                )
+            )
+        else:
+            # Moving/dynamic loops are frame barriers.  Their bodies may still
+            # compress recursively, but the whole loop cannot join a parent
+            # static tandem candidate.
+            finish_region()
+            total_cost += 2 + child_cost
+
+    finish_region()
+    return total_cost, stats
 
 
 def _run_lengths(code: str, chars: set[str]) -> list[int]:
@@ -316,7 +337,7 @@ def _duplicate_loop_profile(nodes: tuple[object, ...], *, semantic: bool) -> dic
             continue
         repeated_classes += 1
         repeated_instances += len(lengths)
-        # Unrealistic dictionary/macro upper bound: keep the first instance.
+        # This is intentionally an unrealistic dictionary/macro upper bound.
         duplicate_bytes_after_first += sum(lengths[1:])
     return {
         "unique_loop_classes": len(groups),
@@ -331,6 +352,7 @@ def profile_code(text: str) -> dict[str, Any]:
     canon = precanonicalize(raw)
     nodes = canonicalize(parse(canon))
     canonical_source = stringify(nodes)
+    canonical_bytes = len(canonical_source)
 
     counts = Counter(raw)
     move_runs = _run_lengths(raw, {">", "<"})
@@ -339,7 +361,8 @@ def profile_code(text: str) -> dict[str, Any]:
     result: dict[str, Any] = {
         "bf_bytes": len(raw),
         "precanonical_bytes": len(canon),
-        "canonical_ast_bytes": len(canonical_source),
+        "canonical_ast_bytes": canonical_bytes,
+        "canonicalization_saved_bytes": len(raw) - canonical_bytes,
         "command_counts": {ch: counts.get(ch, 0) for ch in "><+-.,[]"},
         "movement_bytes": counts.get(">", 0) + counts.get("<", 0),
         "arithmetic_bytes": counts.get("+", 0) + counts.get("-", 0),
@@ -356,34 +379,28 @@ def profile_code(text: str) -> dict[str, Any]:
     }
 
     for mode, semantic in (("literal", False), ("semantic", True)):
-        regions: list[list[Atom]] = []
-        atomize_sequence(nodes, semantic=semantic, regions=regions)
-        rows = [profile_region(region) for region in regions]
-        total_region_bytes = sum(r["source_bytes"] for r in rows)
-        total_saved = sum(r["greedy_ideal_saved_bytes"] for r in rows)
+        optimistic_cost, stats = _profile_sequence(nodes, semantic=semantic)
+        if optimistic_cost > canonical_bytes:
+            raise AssertionError((mode, optimistic_cost, canonical_bytes))
+        reroll_saved = canonical_bytes - optimistic_cost
         result[f"{mode}_reroll"] = {
-            "regions": len(rows),
-            "atoms": sum(r["atoms"] for r in rows),
-            "region_source_bytes": total_region_bytes,
-            "candidate_starts": sum(r["candidate_starts"] for r in rows),
-            "greedy_repeat_bytes": sum(r["greedy_repeat_bytes"] for r in rows),
-            "greedy_ideal_saved_bytes": total_saved,
-            "greedy_ideal_saved_fraction_of_program": (
-                total_saved / len(raw) if raw else 0.0
+            **stats,
+            "reroll_incremental_saved_bytes": reroll_saved,
+            "reroll_incremental_saved_fraction_of_program": (
+                reroll_saved / len(raw) if raw else 0.0
             ),
-            "optimistic_result_bytes_if_free_reroll": len(raw) - total_saved,
-            "max_repeat_count": max((r["max_repeat_count"] for r in rows), default=1),
-            "max_period_atoms": max((r["max_period_atoms"] for r in rows), default=0),
-            "max_single_candidate_saved_bytes": max(
-                (r["max_single_candidate_saved_bytes"] for r in rows), default=0
-            ),
+            "optimistic_result_bytes_if_free_reroll": optimistic_cost,
+            "total_saved_including_canonicalization": len(raw) - optimistic_cost,
         }
 
     return result
 
 
 def profile(path: Path) -> dict[str, Any]:
-    return {"name": str(path), **profile_code(path.read_text(encoding="ascii", errors="ignore"))}
+    return {
+        "name": str(path),
+        **profile_code(path.read_text(encoding="ascii", errors="ignore")),
+    }
 
 
 def main() -> None:
@@ -401,8 +418,8 @@ def main() -> None:
             print(
                 f"{row['name']}: bytes={row['bf_bytes']:,} "
                 f"move={row['movement_bytes'] / row['bf_bytes']:.1%} "
-                f"literal_ideal={lit['greedy_ideal_saved_bytes']:,} "
-                f"semantic_ideal={sem['greedy_ideal_saved_bytes']:,} "
+                f"literal_ideal={lit['reroll_incremental_saved_bytes']:,} "
+                f"semantic_ideal={sem['reroll_incremental_saved_bytes']:,} "
                 f"semantic_result={sem['optimistic_result_bytes_if_free_reroll']:,}"
             )
 
