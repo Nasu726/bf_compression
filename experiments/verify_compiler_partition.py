@@ -5,7 +5,10 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dead_affine_target_opt import optimize_region_zero_dead_affine
+from dead_affine_target_opt import (
+    optimize_region_zero_dead_affine,
+    optimize_region_zero_dead_affine_fixedpoint,
+)
 from region_zero_opt import optimize_region_zero
 from bf_runtime import run_bf
 
@@ -21,7 +24,11 @@ def main() -> None:
     ap.add_argument("program", type=Path)
     ap.add_argument(
         "--optimizer",
-        choices=("region-zero", "region-zero-dead-affine"),
+        choices=(
+            "region-zero",
+            "region-zero-dead-affine",
+            "region-zero-dead-affine-fixedpoint",
+        ),
         default="region-zero",
     )
     args = ap.parse_args()
@@ -30,9 +37,12 @@ def main() -> None:
     if args.optimizer == "region-zero":
         optimized = optimize_region_zero(original)
         suffix = ".region-zero.bf"
-    else:
+    elif args.optimizer == "region-zero-dead-affine":
         optimized = optimize_region_zero_dead_affine(original)
         suffix = ".region-zero-dead-affine.bf"
+    else:
+        optimized = optimize_region_zero_dead_affine_fixedpoint(original)
+        suffix = ".region-zero-dead-affine-fixedpoint.bf"
     out_path = args.program.with_name(args.program.stem + suffix)
     out_path.write_text(optimized, encoding="ascii")
 
