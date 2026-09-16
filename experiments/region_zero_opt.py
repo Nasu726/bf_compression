@@ -193,6 +193,8 @@ def _new_stats() -> dict[str, Any]:
         "removed_bytes_by_origin": {},
         "removed_by_loop_kind": {},
         "removed_bytes_by_loop_kind": {},
+        "original_loop_kinds": {},
+        "loop_kind_transitions": {},
     }
 
 
@@ -270,25 +272,28 @@ def _optimize_sequence(
         if not isinstance(node, Loop):
             raise AssertionError(node)
 
+        original_body = canonicalize(node.body)
+        original_kind = _loop_kind(original_body)
+        _bump(stats["original_loop_kinds"], original_kind)
+
         cur = value_at(logical_ptr)
         if cur == 0:
             origin = origin_at(logical_ptr) or "known_zero"
-            original_body = canonicalize(node.body)
-            kind = _loop_kind(original_body)
             loop_bytes = 2 + len(stringify(original_body))
             stats["removed_known_zero_loops"] += 1
             stats["removed_known_zero_loop_bytes"] += loop_bytes
             _bump(stats["removed_by_origin"], origin)
             _bump(stats["removed_bytes_by_origin"], origin, loop_bytes)
-            _bump(stats["removed_by_loop_kind"], kind)
-            _bump(stats["removed_bytes_by_loop_kind"], kind, loop_bytes)
+            _bump(stats["removed_by_loop_kind"], original_kind)
+            _bump(stats["removed_bytes_by_loop_kind"], original_kind, loop_bytes)
+            _bump(stats["loop_kind_transitions"], f"{original_kind}->removed")
             continue
 
         # Body-local simplification is safe with an unknown iteration-entry
         # state: facts established earlier in the same body hold on every
         # executed iteration.
         body = _optimize_sequence(
-            canonicalize(node.body),
+            original_body,
             default_value=UNKNOWN,
             default_origin=None,
             initial_values=None,
@@ -300,11 +305,14 @@ def _optimize_sequence(
 
         flush_move()
         if clear_loop:
+            _bump(stats["loop_kind_transitions"], f"{original_kind}->clear")
             out.append(Loop(("-",)))
             values[logical_ptr] = 0
             origins[logical_ptr] = "clear"
             continue
 
+        new_kind = _loop_kind(body)
+        _bump(stats["loop_kind_transitions"], f"{original_kind}->{new_kind}")
         delta = body_static_delta(body)
         if delta == 0:
             _end, touched = balanced_effects(body, logical_ptr)
