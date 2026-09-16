@@ -18,8 +18,8 @@ A clear of some other cell is safe to cross because 8-bit ``[-]`` terminates,
 has no I/O, and returns to the same pointer.
 
 For a proved-dead target, +/- commands at that offset inside the producer loop
-can be deleted.  Pointer moves are then canonicalized, so this profiler reports
-the exact local loop-byte saving of that conservative rewrite.  It does not
+can be deleted. Pointer moves are then canonicalized, so this profiler reports
+the exact local loop-byte saving of that conservative rewrite. It does not
 apply the rewrite yet.
 """
 
@@ -33,6 +33,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from region_zero_opt import (
     Loop,
+    body_static_delta,
     canonicalize,
     optimize_region_zero,
     parse,
@@ -74,10 +75,10 @@ def target_killed_before_observation(
     start_ptr: int,
     target: int,
 ) -> tuple[bool, int]:
-    """Return (proved_dead, distance_in_nodes) for one absolute relative target.
+    """Return (proved_dead, distance_in_nodes) for one relative target.
 
-    This deliberately stops at every non-clear loop.  The proof therefore never
-    depends on summarizing an intervening branch or moving pointer loop.
+    This deliberately stops at every non-clear loop. The proof therefore never
+    depends on summarizing an intervening branch or moving-pointer loop.
     """
     ptr = start_ptr
     distance = 0
@@ -91,7 +92,7 @@ def target_killed_before_observation(
             continue
         if node in ("+", "-"):
             # Arithmetic is a dead-state-preserving update if this cell is later
-            # killed before observation.  It need not make the old value live.
+            # killed before observation. It need not make the old value live.
             continue
         if node == ".":
             if ptr == target:
@@ -111,7 +112,7 @@ def target_killed_before_observation(
             # A clear at another offset is terminating, local, and pointer-balanced.
             continue
 
-        # Any other loop may branch on or indirectly touch the target.  Stop
+        # Any other loop may branch on or indirectly touch the target. Stop
         # rather than assuming an effect summary in this first profiler.
         return False, distance
 
@@ -204,18 +205,17 @@ def analyze_sequence(nodes: tuple[object, ...], stats: dict[str, Any]) -> None:
                 stats["producer_loop_bytes_after"] += after
                 stats["savings_per_loop"][str(saving)] += 1
 
-        # Every body is also a lexical sequence.  Relative offsets inside it are
+        # Every body is also a lexical sequence. Relative offsets inside it are
         # meaningful even if the outer loop itself moves the pointer.
         analyze_sequence(body, stats)
 
-        # For sibling coordinates, only recursively pointer-balanced loops keep
-        # the same frame.  Flat balanced bodies handled above do; a clear does;
-        # anything else is conservatively treated as a frame barrier for future
-        # producers.  We do not need to keep scanning after a barrier here because
-        # each later producer starts from the local ptr maintained by its own
-        # sequence traversal; reset it to a fresh relative zero frame.
-        # A structural delta helper is intentionally avoided: the opportunity
-        # proof itself never scans across an unrecognized loop.
+        # Keep the same frame after a recursively balanced loop. A moving or
+        # recursively dynamic loop destroys absolute identity, but on normal
+        # exit Level 1 starts a fresh relative epoch at the exit pointer. Mirror
+        # that rule here by resetting the sibling coordinate to relative zero.
+        delta = body_static_delta(body)
+        if delta is None or delta != 0:
+            ptr = 0
 
 
 def profile(path: Path) -> dict[str, Any]:
