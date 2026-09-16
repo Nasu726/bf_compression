@@ -161,3 +161,66 @@ The next extensions should preserve the same local-barrier discipline:
 2. backward demanded-information on no-input epochs;
 3. target pruning for balanced affine loops when downstream demand proves cells dead;
 4. semantic rerolling and layout work only after this baseline is measured on multiple compiler workloads.
+
+## 2026-09-16 — Level-1 compiler suite, ablation, and validation
+
+The relative-region known-zero prototype was expanded from one partition artifact to seven independently generated compiler workloads. Every input program had already passed through `Python_to_BF_Translator`'s existing `optimize_bf`, so the measurements are incremental improvements over the current compiler optimizer rather than raw-source cleanup.
+
+### Seven-artifact result
+
+Across 2,066,322 bytes of existing-optimized BF:
+
+- relative-region known-zero output: **1,944,111 bytes**;
+- saving: **122,211 bytes**;
+- weighted saving: **5.9144%**;
+- per-artifact range: **2.76% to 8.33%**.
+
+The workloads are partition, ABC153-style streaming list processing, runtime character store/join, direct join of input characters, string-to-int, int-to-string, and direct integer input/output. The detailed machine-readable record is `results/compiler_region_zero_suite_v1.json`.
+
+All seven reach a fixed point after one productive pass: applying the same pass a second time saves zero additional bytes. This argues for a single recursive traversal rather than an outer fixed-point loop for the Level-1 implementation.
+
+### Ablation: shallow relative regions versus recursion
+
+`experiments/profile_region_zero_ablation.py` compares the full recursive pass with a depth-0 variant that continues dataflow across local relative-base epochs but does not optimize loop bodies recursively.
+
+Aggregated over the seven artifacts:
+
+- shallow relative-region analysis saves **53,891 bytes** = **44.10%** of the full 122,211-byte gain;
+- recursive loop-body analysis adds **68,320 bytes** = **55.90%** of the gain.
+
+The split varies sharply by workload. Partition is 98.56% recursion-derived, direct join is 100% recursion-derived, while the runtime character-store case gets 87.54% of its gain from the shallow level. Therefore neither component can be treated as incidental.
+
+The shallow figure must not be described as the direct contribution of the moving-loop-exit-zero theorem. It also includes ordinary top-level facts that become available once the whole-program all-balanced gate is removed. The theorem itself directly removed very few loops in the original partition measurement.
+
+A particularly clean counterexample to the old optimizer architecture is `direct_join_input`: all 826 original loops are pointer-balanced and there are no moving/dynamic barriers, yet the recursive pass still saves **2,131 bytes (5.58%)**. The existing known-zero elimination is only applied at top level and does not recurse into loop bodies. Thus there are two independent design defects in the old baseline: whole-program abandonment in the presence of moving loops, and lack of recursive body dataflow even when every loop is balanced.
+
+### Expanded differential validation
+
+Representative full-state differential execution now covers all seven compiler-generated artifacts. For each checked input, baseline and region-zero output agree on:
+
+- output;
+- input bytes consumed;
+- final data pointer;
+- the complete simulated memory state.
+
+Partition retains its four independent workloads; ABC153 streaming and each string/conversion workload have representative inputs. This is stronger regression evidence than output-only testing, while still remaining empirical evidence rather than a universal proof.
+
+### Negative follow-up: exact-value clear shortening
+
+`experiments/known_clear_opt.py` tested a small finite-state extension. If the exact current 8-bit value before `[-]` is known to be 1, 2, 254, or 255, direct `+`/`-` arithmetic can be shorter than the three-byte clear loop. Adversarial differential tests under all three supported EOF conventions pass.
+
+However, after the region-zero pass the seven compiler artifacts contain **zero profitable occurrences** of this form:
+
+- rewritten exact-value clears: 0;
+- incremental saving: **0 bytes**.
+
+This direction is therefore recorded as a negative result and should not be promoted into the Level-1 production baseline merely because the local transformation is valid. It also suggests that the next finite-state experiment should profile opportunity before implementing a broader exact-value resynthesis pass.
+
+### Updated research priority
+
+The Level-1 architecture should be a **recursive relative-region dataflow pass**, not merely a moving-loop barrier patch. The next work should preserve that traversal and first measure where additional semantic information is actually consumed. In particular:
+
+1. profile exact/finite entry states at nontrivial balanced loops and straight-line arithmetic before building resynthesis machinery;
+2. pursue backward demanded-information on no-input epochs, where EOF ambiguity is absent;
+3. use demand to prune affine-loop targets or dead routing only when the boundary proof is explicit;
+4. keep hand-written and compiler-generated BF as separate benchmark classes, since the four compact hand-written programs still gain 0 bytes from Level 1.
