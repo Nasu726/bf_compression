@@ -14,6 +14,7 @@ no overwrite/dead-store rule depends on EOF behavior.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 BF = frozenset("><+-.,[]")
 UNKNOWN = None
@@ -104,8 +105,6 @@ def stringify(nodes: tuple[object, ...] | list[object]) -> str:
 
 
 def canonicalize(nodes: tuple[object, ...] | list[object]) -> tuple[object, ...]:
-    # Reuse the text canonicalizer recursively; this keeps the prototype small
-    # and avoids relying on compiler metadata.
     out: list[object] = []
     move = 0
     add = 0
@@ -150,12 +149,7 @@ def canonicalize(nodes: tuple[object, ...] | list[object]) -> tuple[object, ...]
 
 
 def body_static_delta(nodes: tuple[object, ...]) -> int | None:
-    """Return one-iteration pointer delta iff every nested loop is balanced.
-
-    A loop whose body has nonzero delta is a moving-loop barrier as an operation:
-    its iteration count is data-dependent, so its total pointer displacement is
-    not statically known.
-    """
+    """Return one-iteration pointer delta iff every nested loop is balanced."""
     ptr = 0
     for node in nodes:
         if node == ">":
@@ -189,19 +183,41 @@ def balanced_effects(nodes: tuple[object, ...], start: int) -> tuple[int, set[in
     return ptr, touched
 
 
+def _new_stats() -> dict[str, Any]:
+    return {
+        "removed_known_zero_loops": 0,
+        "removed_known_zero_loop_bytes": 0,
+        "moving_barriers_emitted": 0,
+        "balanced_loops_emitted": 0,
+        "removed_by_origin": {},
+        "removed_bytes_by_origin": {},
+    }
+
+
+def _bump(mapping: dict[str, int], key: str, amount: int = 1) -> None:
+    mapping[key] = mapping.get(key, 0) + amount
+
+
 def _optimize_sequence(
     nodes: tuple[object, ...],
     *,
     default_value: int | None,
+    default_origin: str | None,
     initial_values: dict[int, int | None] | None = None,
+    initial_origins: dict[int, str | None] | None = None,
+    stats: dict[str, Any],
 ) -> tuple[object, ...]:
     values: dict[int, int | None] = dict(initial_values or {})
+    origins: dict[int, str | None] = dict(initial_origins or {})
     logical_ptr = 0
     emitted_ptr = 0
     out: list[object] = []
 
     def value_at(cell: int) -> int | None:
         return values[cell] if cell in values else default_value
+
+    def origin_at(cell: int) -> str | None:
+        return origins[cell] if cell in origins else default_origin
 
     def flush_move() -> None:
         nonlocal emitted_ptr
@@ -224,16 +240,16 @@ def _optimize_sequence(
             cur = value_at(logical_ptr)
             if cur is not UNKNOWN:
                 values[logical_ptr] = (cur + (1 if node == "+" else -1)) & 255
+                origins[logical_ptr] = "arithmetic"
             else:
                 values[logical_ptr] = UNKNOWN
+                origins.pop(logical_ptr, None)
             out.append(node)
             continue
         if node == ",":
-            # EOF semantics are intentionally not assumed. The post-input value
-            # is unknown, and no preceding write is deleted merely because a
-            # comma follows.
             flush_move()
             values[logical_ptr] = UNKNOWN
+            origins.pop(logical_ptr, None)
             out.append(node)
             continue
         if node == ".":
@@ -243,67 +259,95 @@ def _optimize_sequence(
         if not isinstance(node, Loop):
             raise AssertionError(node)
 
+        cur = value_at(logical_ptr)
+        if cur == 0:
+            origin = origin_at(logical_ptr) or "known_zero"
+            loop_bytes = 2 + len(stringify(node.body))
+            stats["removed_known_zero_loops"] += 1
+            stats["removed_known_zero_loop_bytes"] += loop_bytes
+            _bump(stats["removed_by_origin"], origin)
+            _bump(stats["removed_bytes_by_origin"], origin, loop_bytes)
+            continue
+
         # Body-local simplification is safe with an unknown iteration-entry
         # state: facts established earlier in the same body hold on every
         # executed iteration.
         body = _optimize_sequence(
             canonicalize(node.body),
             default_value=UNKNOWN,
+            default_origin=None,
             initial_values=None,
+            initial_origins=None,
+            stats=stats,
         )
         body = canonicalize(body)
         clear_loop = body == ("-",)
-        cur = value_at(logical_ptr)
-
-        # If the loop-control cell is already known zero, the loop is skipped,
-        # including moving loops; no pointer movement occurs.
-        if cur == 0:
-            continue
 
         flush_move()
         if clear_loop:
             out.append(Loop(("-",)))
             values[logical_ptr] = 0
+            origins[logical_ptr] = "clear"
             continue
 
         delta = body_static_delta(body)
         if delta == 0:
-            # A balanced loop returns to the same address. Any cell written by
-            # the body is unknown afterwards; reaching the instruction after ]
-            # proves the control cell is zero.
             _end, touched = balanced_effects(body, logical_ptr)
             out.append(Loop(body))
+            stats["balanced_loops_emitted"] += 1
             for cell in touched:
                 values[cell] = UNKNOWN
+                origins.pop(cell, None)
             values[logical_ptr] = 0
+            origins[logical_ptr] = "balanced_exit"
             continue
 
         # Moving/dynamic barrier. If the loop reaches its exit, `]` has just
-        # observed zero at the *current* pointer. Forget absolute identity and
-        # start a fresh relative epoch at that exit cell, retaining only cell 0
-        # = 0. This also covers the skipped-loop case semantically, but cur != 0
-        # here so an executed path may move.
+        # observed zero at the current pointer. Forget absolute identity and
+        # start a fresh relative epoch there, retaining only cell 0 = 0.
         out.append(Loop(body))
+        stats["moving_barriers_emitted"] += 1
         logical_ptr = 0
         emitted_ptr = 0
         values = {0: 0}
+        origins = {0: "moving_exit"}
         default_value = UNKNOWN
+        default_origin = None
 
     flush_move()
     return tuple(out)
 
 
-def optimize_region_zero(code: str) -> str:
+def optimize_region_zero_with_stats(code: str) -> tuple[str, dict[str, Any]]:
     original = strip_bf(code)
     nodes = canonicalize(parse(precanonicalize(original)))
-    optimized = _optimize_sequence(nodes, default_value=0)
+    stats = _new_stats()
+    optimized = _optimize_sequence(
+        nodes,
+        default_value=0,
+        default_origin="initial_zero",
+        stats=stats,
+    )
     optimized = canonicalize(optimized)
     result = stringify(optimized)
-    # Research invariant: never make emitted standard BF longer than the local
-    # canonical baseline. Returning canonical rather than original is fine: the
-    # project already accepts canonical +- / >< folding as Level 0.
     baseline = stringify(nodes)
-    return result if len(result) <= len(baseline) else baseline
+    stats["canonical_bytes"] = len(baseline)
+    stats["result_bytes"] = len(result)
+    stats["saved_vs_canonical"] = len(baseline) - len(result)
+    stats["accepted"] = len(result) <= len(baseline)
+    if not stats["accepted"]:
+        stats["result_bytes"] = len(baseline)
+        stats["saved_vs_canonical"] = 0
+        return baseline, stats
+    return result, stats
 
 
-__all__ = ["optimize_region_zero", "strip_bf"]
+def optimize_region_zero(code: str) -> str:
+    return optimize_region_zero_with_stats(code)[0]
+
+
+__all__ = [
+    "optimize_region_zero",
+    "optimize_region_zero_with_stats",
+    "strip_bf",
+]
