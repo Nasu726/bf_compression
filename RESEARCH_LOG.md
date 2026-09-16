@@ -56,9 +56,19 @@ Implement an epoch-local backward demanded-information prototype. Start with fac
 
 1. recognize balanced affine/clear loops as semantic atoms;
 2. propagate demanded cell offsets backward inside one epoch;
-3. model `.` as an observable read and `,` as an observable input + overwrite;
+3. model `.` as an observable read; treat `,` conservatively until EOF semantics are fixed;
 4. detect target updates that are definitely overwritten or otherwise unobserved before the epoch boundary;
 5. only then attempt a shorter loop representative or deletion;
 6. keep boundary demand conservative until a barrier interface summary is proved.
 
 A second independent follow-up is semantic tandem-repeat profiling after pointer-offset normalization, but dead/demand analysis is the higher-priority continuation because the region experiment shows many epochs already contain multiple balanced operations.
+
+## 2026-09-16 — Input/EOF semantics blocks naive dead-store elimination
+
+A first backward-demand scratch prototype treated `,` as an unconditional overwrite. On the current corpus this immediately reported the leading `-` in `rot13.bf`'s `-,+` as dead.
+
+That rewrite is not generally valid. Under the common Brainfuck convention where EOF leaves the current cell unchanged, the sequence deliberately works as an EOF normalizer: from a zero cell, `-` creates 255, EOF leaves 255 in place, and the following `+` maps it back to zero. It also works when EOF itself writes 255. Deleting the leading `-` changes termination behavior under the no-change convention.
+
+This is a useful counterexample because it comes from the committed real corpus rather than a synthetic adversarial case. Input cannot be modeled as a kill operation until the project ABI states EOF behavior precisely. Issue #3 tracks the specification gap.
+
+Until that is resolved, demanded-information analysis should treat `,` as an observable operation that may depend on the previous current-cell value. Safe work can continue on no-input epochs and on transformations whose proof does not require an overwrite assumption.
