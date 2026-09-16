@@ -171,3 +171,60 @@ The next work is therefore opportunity-directed rather than a blind backend rewr
 2. measure the hot kernels in the specialized stride-66 hexadecimal sequence separately, because those programs do not use the generic Quad scalar path in the same way;
 3. integrate HexLane first where the measured coverage is high enough to justify the missing operations;
 4. require complete-artifact source-size and differential correctness results before treating the microbenchmark ratios as realized compression.
+
+## 2026-09-17 — Source attribution says HexLane must extend through I/O
+
+`experiments/profile_quad_backend_calls.py` attributes raw emitted BF to the outermost backend call while avoiding nested-call double counting. Across six representative generic compiler programs:
+
+- raw source: **1,679,119 bytes**;
+- final existing-optimized source: **1,678,267 bytes**;
+- source attributed to backend calls: **1,473,735 bytes = 87.77% of raw**.
+
+The largest attributed emitters are not merely arithmetic:
+
+| backend operation | calls | raw BF bytes | movement bytes |
+| --- | ---: | ---: | ---: |
+| `print_s64` | 3 | **363,941** | 315,716 |
+| `copy_cell` | 97 | **236,451** | 234,996 |
+| `slt64` | 3 | **165,260** | 164,138 |
+| `read_packed_s64_line_token` | 3 | **151,974** | 144,054 |
+| `_eq_byte_const` | 14 | **106,463** | 105,471 |
+| `copy64` | 19 | **103,690** | 93,834 |
+| `_quad_to_decimal_bytes` | 1 | **99,701** | 88,124 |
+| `add64` | 4 | 55,009 | 54,113 |
+| `sub64` | 2 | 53,513 | 53,003 |
+
+These are raw attribution measurements: final peephole optimization can coalesce across call boundaries, so the table is for prioritization rather than additive saving prediction.
+
+The implication is strong. Replacing only Quad `copy/add/sub/compare` with HexLane would leave the dominant decimal input/output and byte-copy routing intact. A viable generic 10x backend needs radix-16-native decimal I/O and must shrink the physical distances behind `copy_cell`, `_eq_byte_const`, line handling, and related helper traffic.
+
+The generic path remains the larger global opportunity: these six cases alone are about 1.68 MB, whereas the partition specialization is 363,109 bytes. Therefore full-program effort should prioritize the generic representation, with specialized record work used as a parallel proving ground.
+
+### Independent confirmation in the stride-66 partition specialization
+
+`experiments/profile_hex_specialized_kernels.py` profiles the current specialized prefix implementation:
+
+- optimized complete partition program: **363,109 bytes**;
+- cumulative raw after reading N and values: 244,014;
+- after reverse-total phase: 246,392;
+- partition plus terminal output: 364,477.
+
+Its hot kernels are again overwhelmingly routing:
+
+| kernel | bytes | movement | movement share |
+| --- | ---: | ---: | ---: |
+| counted prefix record body | **188,482** | 176,148 | **93.46%** |
+| partition prefix body, answer extent 6 | **72,916** | 65,664 | **90.05%** |
+| DATA->TOTAL add kernel | 9,853 | 8,174 | 82.96% |
+
+This is useful independent evidence because the partition path does not use the generic Quad scalar ABI in the same way. The same pathology reappears in a dense hexadecimal record: statically unrolled nibble operations expose physical field distance as literal BF movement.
+
+Machine-readable summary: `results/source_attribution_summary_v1.json`.
+
+### Revised implementation priority
+
+1. treat HexLane as an **end-to-end scalar ABI candidate**, not only an arithmetic-core replacement;
+2. next implement the high-coverage missing scalar operations: signed comparison, zero/nonzero, increment/negate, and especially decimal conversion / printing directly over radix-16 lanes;
+3. use one generic real artifact (direct integer input/output is the cleanest initial vertical slice) for the first integration because 99.18% of its raw source is backend-attributed;
+4. in parallel, prototype one runtime-lane version of a specialized hexadecimal kernel to quantify how much static nibble unrolling can be removed without yet changing the full stride-66 record ABI;
+5. only promote either path after complete-artifact differential correctness and literal-source measurements.
