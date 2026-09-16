@@ -3,12 +3,12 @@ from __future__ import annotations
 """Experimental dense radix-16 int64 scalar core for source-size research.
 
 A word is sixteen little-endian nibble cells (0..15), with no per-digit marker.
-Operations are Python-unrolled over the fixed sixteen digits.  Runtime speed is
+Operations are Python-unrolled over the fixed sixteen digits. Runtime speed is
 not the objective; emitted standard-BF source length and physical tape width are.
 
 This deliberately small core supports the operations needed for the first
-representation comparison: set/copy/add/sub/unsigned >=.  Inputs are preserved
-and arithmetic is modulo 2**64.  The three-word arithmetic operations currently
+representation comparison: set/copy/add/sub/unsigned >=. Inputs are preserved
+and arithmetic is modulo 2**64. The three-word arithmetic operations currently
 require distinct word bases.
 """
 
@@ -107,10 +107,10 @@ class Hex16I64Core:
             self.bf.clear(cell)
 
     def set_u64(self, dst: Hex16I64Ref, value: int) -> None:
+        """Set one dense word without touching unrelated shared scratch."""
         value &= MASK64
         for i in range(DIGITS):
             self.bf.set_const(dst.digit(i), (value >> (4 * i)) & 0xF)
-        self._clear_scratch()
 
     def copy64(self, dst: Hex16I64Ref, src: Hex16I64Ref) -> None:
         if dst.base == src.base:
@@ -140,7 +140,12 @@ class Hex16I64Core:
             bf.end_while(self.next_carry)
         self._clear_scratch()
 
-    def _sub_with_carry(self, dst: Hex16I64Ref, a: Hex16I64Ref, b: Hex16I64Ref) -> None:
+    def _sub_with_carry(
+        self,
+        dst: Hex16I64Ref,
+        a: Hex16I64Ref,
+        b: Hex16I64Ref,
+    ) -> None:
         if len({dst.base, a.base, b.base}) != 3:
             raise ValueError("hex16 sub64 requires distinct operands")
         bf = self.bf
@@ -160,13 +165,19 @@ class Hex16I64Core:
             bf.add_const(self.next_carry, -1)
             bf.add_const(self.carry, 1)
             bf.end_while(self.next_carry)
-        # carry is the final radix-complement carry (1 iff unsigned a>=b).
+        # carry is the final radix-complement carry (1 iff unsigned a >= b).
 
     def sub64(self, dst: Hex16I64Ref, a: Hex16I64Ref, b: Hex16I64Ref) -> None:
         self._sub_with_carry(dst, a, b)
         self._clear_scratch()
 
-    def uge64(self, result: int, a: Hex16I64Ref, b: Hex16I64Ref, tmp_word: Hex16I64Ref) -> None:
+    def uge64(
+        self,
+        result: int,
+        a: Hex16I64Ref,
+        b: Hex16I64Ref,
+        tmp_word: Hex16I64Ref,
+    ) -> None:
         if result in range(tmp_word.base, tmp_word.base + tmp_word.cells):
             raise ValueError("result must not alias compare temporary")
         self._sub_with_carry(tmp_word, a, b)
