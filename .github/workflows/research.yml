@@ -48,11 +48,17 @@ jobs:
           python experiments/profile_region_zero.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_region_zero.json
           cat results/tmp/compiler_region_zero.json
 
+      - name: Differentially verify compiler-produced BF
+        env:
+          PYTHONPATH: translator/pybf
+        run: python experiments/verify_compiler_partition.py results/tmp/compiler_partition.bf
+
       - name: Upload research outputs
         uses: actions/upload-artifact@v4
         with:
           name: region-zero-research
           path: |
             results/tmp/compiler_partition.bf
+            results/tmp/compiler_partition.region-zero.bf
             results/tmp/compiler_regions.json
             results/tmp/compiler_region_zero.json
