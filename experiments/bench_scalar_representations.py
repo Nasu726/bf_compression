@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-"""Compare literal BF source cost of existing int64 physical representations.
+"""Compare literal BF source cost of candidate int64 physical representations.
 
-This is an opportunity benchmark, not a compiler integration.  It emits a few
-representative primitives from Python_to_BF_Translator at a pinned revision:
+This is an opportunity benchmark, not a compiler integration. It emits a few
+representative primitives from Python_to_BF_Translator at a pinned revision,
+plus the research-side dense radix-16 prototype:
 
 - Quad64: current 99-cell scalar representation;
 - Base4: experimental 66-cell radix-4 lane representation;
+- Hex16: dense 16-cell radix-16 representation with Python-unrolled digits;
 - Packed-at-rest: 8-byte persistent values converted through a shared Quad
   workspace using the existing preserving PackedI64Core conversions.
 
 All snippets are passed through the compiler's existing ``optimize_bf`` before
-length measurement.  The benchmark intentionally reports both raw and optimized
-source lengths because a representation can trade physical width for a longer
-runtime lane body.
+length measurement. Both raw and optimized source lengths are reported because
+a representation can trade physical width for a longer runtime body.
 """
 
 import json
@@ -24,6 +25,7 @@ from bfopt import optimize_bf
 from bfpacked64 import PackedI64Core, PackedI64Ref
 from bfquad import Quad64Core, Quad64Ref, WORD_CELLS as QUAD_CELLS
 from bfbase4 import Base4I64Core, Base4I64Ref, WORD_CELLS as BASE4_CELLS
+from hex16_scalar_core import Hex16I64Core, Hex16I64Ref, WORD_CELLS as HEX16_CELLS
 
 
 def measured(build: Callable[[BFEmitter], None]) -> dict[str, int]:
@@ -56,6 +58,17 @@ def base4_refs():
     )
 
 
+def hex16_refs():
+    gap = HEX16_CELLS + 1
+    a = Hex16I64Ref(0)
+    b = Hex16I64Ref(gap)
+    dst = Hex16I64Ref(2 * gap)
+    tmp = Hex16I64Ref(3 * gap)
+    result = 4 * gap
+    scratch = result + 2
+    return a, b, dst, tmp, result, scratch
+
+
 def bench_quad() -> dict[str, object]:
     a, b, dst, tmp, result = quad_refs()
     return {
@@ -84,14 +97,35 @@ def bench_base4() -> dict[str, object]:
     }
 
 
+def bench_hex16() -> dict[str, object]:
+    a, b, dst, tmp, result, scratch = hex16_refs()
+    return {
+        "word_cells": HEX16_CELLS,
+        "scratch_cells": Hex16I64Core.SCRATCH_CELLS,
+        "copy": measured(
+            lambda bf: Hex16I64Core(bf, scratch).copy64(dst, a)
+        ),
+        "add": measured(
+            lambda bf: Hex16I64Core(bf, scratch).add64(dst, a, b)
+        ),
+        "sub": measured(
+            lambda bf: Hex16I64Core(bf, scratch).sub64(dst, a, b)
+        ),
+        "uge": measured(
+            lambda bf: Hex16I64Core(bf, scratch).uge64(result, a, b, tmp)
+        ),
+        "set_const": measured(
+            lambda bf: Hex16I64Core(bf, scratch).set_u64(
+                dst, 0xFEDCBA9876543210
+            )
+        ),
+    }
+
+
 def packed_preserving_add_via_quad(bf: BFEmitter) -> None:
-    # Dense persistent values.
     pa = PackedI64Ref(0)
     pb = PackedI64Ref(8)
     pd = PackedI64Ref(16)
-
-    # Shared arithmetic workspace, deliberately placed immediately after a
-    # small guard.  A real allocator may improve this placement further.
     q0 = Quad64Ref(32)
     q1 = Quad64Ref(32 + QUAD_CELLS)
     qd = Quad64Ref(32 + 2 * QUAD_CELLS)
@@ -130,22 +164,31 @@ def bench_packed_at_rest() -> dict[str, object]:
     }
 
 
+def comparison(rows: dict[str, object], candidate: str) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for op in ("copy", "add", "sub", "uge", "set_const"):
+        if op not in rows[candidate]:
+            continue
+        q = rows["quad64"][op]["optimized_bytes"]
+        c = rows[candidate][op]["optimized_bytes"]
+        result[op] = {
+            "quad_bytes": q,
+            f"{candidate}_bytes": c,
+            "delta_bytes": c - q,
+            "ratio": c / q if q else None,
+        }
+    return result
+
+
 def main() -> None:
     rows = {
         "quad64": bench_quad(),
         "base4": bench_base4(),
+        "hex16": bench_hex16(),
         "packed_at_rest": bench_packed_at_rest(),
     }
-    for op in ("copy", "add", "sub", "uge", "set_const"):
-        if op in rows["quad64"] and op in rows["base4"]:
-            q = rows["quad64"][op]["optimized_bytes"]
-            b = rows["base4"][op]["optimized_bytes"]
-            rows.setdefault("base4_vs_quad", {})[op] = {
-                "quad_bytes": q,
-                "base4_bytes": b,
-                "delta_bytes": b - q,
-                "ratio": b / q if q else None,
-            }
+    rows["base4_vs_quad"] = comparison(rows, "base4")
+    rows["hex16_vs_quad"] = comparison(rows, "hex16")
     print(json.dumps(rows, indent=2, sort_keys=True))
 
 
