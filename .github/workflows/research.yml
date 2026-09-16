@@ -20,6 +20,12 @@ jobs:
       - name: Verify exact-value clear shortening
         run: python experiments/verify_known_clear.py
 
+      - name: Verify exact affine summary arithmetic
+        run: python experiments/verify_exact_loop_summary.py
+
+      - name: Verify dead affine target profiling
+        run: python experiments/verify_dead_affine_targets.py
+
       - name: Profile hand-written corpus
         run: python experiments/profile_region_zero.py corpus/*.bf
 
@@ -209,6 +215,19 @@ jobs:
             results/tmp/compiler_direct_int_input.bf \
             --json > results/tmp/compiler_exact_loop_summary.json
           cat results/tmp/compiler_exact_loop_summary.json
+
+      - name: Profile affine targets killed before observation
+        run: |
+          python experiments/profile_dead_affine_targets.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_dead_affine_targets.json
+          cat results/tmp/compiler_dead_affine_targets.json
 
       - name: Differentially verify string/conversion artifacts
         env:
