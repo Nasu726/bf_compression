@@ -41,7 +41,6 @@ from region_zero_opt import (
     strip_bf,
 )
 
-
 PERIODS = tuple(range(1, 129)) + (192, 256, 384, 512)
 
 
@@ -122,7 +121,6 @@ def _intern_ids(atoms: list[Atom]) -> list[int]:
 
 
 def _profile_region(atoms: list[Atom]) -> tuple[int, dict[str, Any]]:
-    """Return optimistic remaining bytes and non-overlapping region stats."""
     stats = _new_stats()
     stats["regions"] = 1
     stats["atoms"] = len(atoms)
@@ -143,11 +141,13 @@ def _profile_region(atoms: list[Atom]) -> tuple[int, dict[str, Any]]:
     best_k = [1] * n
     best_p = [0] * n
     max_p = min(n // 2, PERIODS[-1])
-    lcp = [0] * (n + 1)
 
     for p in PERIODS:
         if p > max_p:
             break
+        # Reset per period so the reverse LCP boundary cannot inherit a stale
+        # value from the previous offset.
+        lcp = [0] * (n + 1)
         for i in range(n - p - 1, -1, -1):
             if ids[i] == ids[i + p]:
                 lcp[i] = lcp[i + 1] + 1
@@ -155,8 +155,6 @@ def _profile_region(atoms: list[Atom]) -> tuple[int, dict[str, Any]]:
                 lcp[i] = 0
             if lcp[i] < p:
                 continue
-            # The repeated body must return to its entry pointer.  Every loop
-            # atom admitted to a region is recursively pointer-balanced.
             if ptr_prefix[i + p] != ptr_prefix[i]:
                 continue
             k = 1 + lcp[i] // p
@@ -166,8 +164,6 @@ def _profile_region(atoms: list[Atom]) -> tuple[int, dict[str, Any]]:
                 end = i + k * p
             if k < 2:
                 continue
-            # Free-wrapper upper bound: retain the first already-compressed
-            # body and remove every later already-compressed copy.
             saved = byte_prefix[end] - byte_prefix[i + p]
             if saved > best_saved[i]:
                 best_saved[i] = saved
@@ -221,7 +217,6 @@ def _profile_sequence(
     *,
     semantic: bool,
 ) -> tuple[int, dict[str, Any]]:
-    """Recursively compose inner compression and enclosing tandem rerolling."""
     total_cost = 0
     stats = _new_stats()
     atoms: list[Atom] = []
@@ -274,9 +269,6 @@ def _profile_sequence(
         _merge_stats(stats, child_stats)
         delta = body_static_delta(body)
         if delta == 0:
-            # Internal compression is already reflected in child_cost.  The
-            # enclosing region may now remove whole repeated loop instances,
-            # but only their remaining cost, avoiding double counting.
             atoms.append(
                 Atom(
                     _loop_key(body, semantic=semantic),
@@ -285,9 +277,6 @@ def _profile_sequence(
                 )
             )
         else:
-            # Moving/dynamic loops are frame barriers.  Their bodies may still
-            # compress recursively, but the whole loop cannot join a parent
-            # static tandem candidate.
             finish_region()
             total_cost += 2 + child_cost
 
@@ -311,10 +300,7 @@ def _run_lengths(code: str, chars: set[str]) -> list[int]:
 
 
 def _threshold_bytes(lengths: list[int]) -> dict[str, int]:
-    return {
-        str(t): sum(x for x in lengths if x >= t)
-        for t in (4, 8, 16, 32, 64, 128)
-    }
+    return {str(t): sum(x for x in lengths if x >= t) for t in (4, 8, 16, 32, 64, 128)}
 
 
 def _duplicate_loop_profile(nodes: tuple[object, ...], *, semantic: bool) -> dict[str, Any]:
@@ -337,7 +323,6 @@ def _duplicate_loop_profile(nodes: tuple[object, ...], *, semantic: bool) -> dic
             continue
         repeated_classes += 1
         repeated_instances += len(lengths)
-        # This is intentionally an unrealistic dictionary/macro upper bound.
         duplicate_bytes_after_first += sum(lengths[1:])
     return {
         "unique_loop_classes": len(groups),
