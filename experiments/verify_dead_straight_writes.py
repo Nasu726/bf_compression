@@ -41,8 +41,10 @@ def main() -> None:
     candidate, stats = same("+++>.<[-]")
     assert stats["proved_dead_arithmetic_bytes"] == 3, (candidate, stats)
 
-    # A non-clear loop is an analysis barrier in this first experiment.
-    candidate, stats = same("+++>[+]<[-]")
+    # A genuine non-clear transfer loop is an analysis barrier in this first
+    # experiment.  `[+]` is intentionally not used here: on 8-bit wrapping
+    # cells it is itself a clear loop and canonicalizes to `[-]`.
+    candidate, stats = same("+++>+[->+<]<[-]")
     assert stats["proved_dead_arithmetic_bytes"] == 0, (candidate, stats)
 
     # Nested lexical scopes are analyzed recursively; the outer control update
