@@ -146,6 +146,19 @@ jobs:
             --json > results/tmp/compiler_string_region_zero.json
           cat results/tmp/compiler_string_region_zero.json
 
+      - name: Measure fixed point across compiler artifacts
+        run: |
+          python experiments/profile_region_zero_fixedpoint.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_region_zero_fixedpoint.json
+          cat results/tmp/compiler_region_zero_fixedpoint.json
+
       - name: Differentially verify runtime character-store artifact
         env:
           PYTHONPATH: translator_string/pybf
