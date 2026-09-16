@@ -7,7 +7,21 @@
     "saved_bytes": 122211,
     "saved_percent_weighted": 5.914421856806442,
     "single_pass_fixed_point": true,
-    "handwritten_corpus_saved_bytes": 0
+    "handwritten_corpus_saved_bytes": 0,
+    "representative_full_state_differential_artifacts_passed": 7
+  },
+  "ablation": {
+    "shallow_relative_region_saved_bytes": 53891,
+    "shallow_share_of_total_percent": 44.09668425935718,
+    "additional_recursive_saved_bytes": 68320,
+    "recursive_share_of_total_percent": 55.90331574064282,
+    "interpretation": "Shallow relative-region analysis and recursive loop-body analysis are independent contributors. The shallow number is not a direct moving-exit-theorem attribution; it includes top-level dataflow recovered by removing the whole-program gate."
+  },
+  "followup_exact_value_clear": {
+    "description": "After region-zero, replace [-] by a shorter direct +/- path when its exact 8-bit entry value is known to be 1, 2, 254, or 255.",
+    "incremental_saved_bytes_across_suite": 0,
+    "rewritten_known_clears": 0,
+    "status": "negative result; keep as research evidence rather than Level-1 baseline"
   },
   "artifacts": [
     {
@@ -19,6 +33,9 @@
       "saved_percent": 4.075635690660381,
       "surviving_moving_or_dynamic_barriers": 16,
       "removed_known_zero_loops": 715,
+      "shallow_saved_bytes": 213,
+      "additional_recursive_saved_bytes": 14586,
+      "recursive_share_percent": 98.56071356172714,
       "full_state_differential": "passed on 4 workloads"
     },
     {
@@ -30,7 +47,10 @@
       "saved_percent": 8.038463217198323,
       "surviving_moving_or_dynamic_barriers": 8,
       "removed_known_zero_loops": 1082,
-      "full_state_differential": "passed"
+      "shallow_saved_bytes": 3855,
+      "additional_recursive_saved_bytes": 20087,
+      "recursive_share_percent": 83.89858825494946,
+      "full_state_differential": "passed on representative mixed workload"
     },
     {
       "name": "char_runtime_store_join",
@@ -41,6 +61,9 @@
       "saved_percent": 8.33158973929782,
       "surviving_moving_or_dynamic_barriers": 13,
       "removed_known_zero_loops": 827,
+      "shallow_saved_bytes": 31371,
+      "additional_recursive_saved_bytes": 4467,
+      "recursive_share_percent": 12.464423237903901,
       "full_state_differential": "passed for abcdef / index 3 -> abcXef"
     },
     {
@@ -53,7 +76,10 @@
       "surviving_moving_or_dynamic_barriers": 0,
       "removed_known_zero_loops": 5,
       "all_original_loops_balanced": true,
-      "full_state_differential": "not run in suite v1"
+      "shallow_saved_bytes": 0,
+      "additional_recursive_saved_bytes": 2131,
+      "recursive_share_percent": 100.0,
+      "full_state_differential": "passed on representative abcdef input"
     },
     {
       "name": "string_to_int",
@@ -64,7 +90,10 @@
       "saved_percent": 6.83827231322226,
       "surviving_moving_or_dynamic_barriers": 84,
       "removed_known_zero_loops": 758,
-      "full_state_differential": "not run in suite v1"
+      "shallow_saved_bytes": 2803,
+      "additional_recursive_saved_bytes": 20559,
+      "recursive_share_percent": 88.00188340039381,
+      "full_state_differential": "passed on representative 123 input"
     },
     {
       "name": "int_to_string",
@@ -75,7 +104,10 @@
       "saved_percent": 2.7568097315009465,
       "surviving_moving_or_dynamic_barriers": 69,
       "removed_known_zero_loops": 621,
-      "full_state_differential": "not run in suite v1"
+      "shallow_saved_bytes": 7938,
+      "additional_recursive_saved_bytes": 3117,
+      "recursive_share_percent": 28.19538670284939,
+      "full_state_differential": "passed on representative 123 input"
     },
     {
       "name": "direct_int_input",
@@ -86,7 +118,10 @@
       "saved_percent": 5.702203404653747,
       "surviving_moving_or_dynamic_barriers": 66,
       "removed_known_zero_loops": 698,
-      "full_state_differential": "not run in suite v1"
+      "shallow_saved_bytes": 7711,
+      "additional_recursive_saved_bytes": 3373,
+      "recursive_share_percent": 30.431252255503427,
+      "full_state_differential": "passed on representative 123 input"
     }
   ],
   "observations": [
@@ -94,6 +129,9 @@
     "Every removed known-zero loop in this suite was structurally pointer-balanced.",
     "The direct_join_input artifact starts with 826 balanced loops and no moving/dynamic loops, yet the recursive region-zero pass still saves 5.58%. Inspection of legacy bfopt shows its known-zero elimination is only applied at top-level and does not recursively optimize loop bodies.",
     "All seven artifacts reach a fixed point after one productive pass; a second pass saves zero additional bytes.",
+    "Ablation attributes 53,891 saved bytes to shallow relative-region dataflow and an additional 68,320 bytes to recursive loop-body dataflow. Which side dominates varies strongly by artifact, so neither should be discarded.",
+    "Representative full-state differential checks now cover all seven compiler-generated artifacts: output, input consumption, final pointer, and full memory match between baseline and region-zero output.",
+    "The exact-value clear-shortening follow-up found zero eligible profitable clears after region-zero across all seven artifacts.",
     "The four compact hand-written corpus programs still save zero bytes, so compiler-generated and hand-written BF should remain separate benchmark classes."
   ]
 }
