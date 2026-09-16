@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import sys
+import argparse
 from pathlib import Path
+import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from dead_affine_target_opt import optimize_region_zero_dead_affine
 from region_zero_opt import optimize_region_zero
 from bf_runtime import run_bf
 
@@ -15,10 +17,23 @@ def observable(result):
 
 
 def main() -> None:
-    path = Path(sys.argv[1])
-    original = path.read_text(encoding="ascii")
-    optimized = optimize_region_zero(original)
-    out_path = path.with_name(path.stem + ".region-zero.bf")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("program", type=Path)
+    ap.add_argument(
+        "--optimizer",
+        choices=("region-zero", "region-zero-dead-affine"),
+        default="region-zero",
+    )
+    args = ap.parse_args()
+
+    original = args.program.read_text(encoding="ascii")
+    if args.optimizer == "region-zero":
+        optimized = optimize_region_zero(original)
+        suffix = ".region-zero.bf"
+    else:
+        optimized = optimize_region_zero_dead_affine(original)
+        suffix = ".region-zero-dead-affine.bf"
+    out_path = args.program.with_name(args.program.stem + suffix)
     out_path.write_text(optimized, encoding="ascii")
 
     cases = [
@@ -33,6 +48,7 @@ def main() -> None:
         b = run_bf(optimized, data, memory_size=30_000, step_limit=1_000_000_000)
         assert observable(a) == observable(b), (
             values,
+            args.optimizer,
             a.output,
             b.output,
             a.input_consumed,
@@ -42,11 +58,11 @@ def main() -> None:
         )
         print(
             f"case_n={len(values)} output={a.output.strip()!r} "
-            f"steps_original={a.steps} steps_region_zero={b.steps}"
+            f"steps_original={a.steps} steps_optimized={b.steps}"
         )
 
     print(
-        f"compiler partition differential: OK; "
+        f"compiler partition differential [{args.optimizer}]: OK; "
         f"{len(original)} -> {len(optimized)} bytes "
         f"({len(original) - len(optimized)} saved)"
     )
