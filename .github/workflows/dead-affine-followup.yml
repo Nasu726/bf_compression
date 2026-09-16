@@ -123,6 +123,19 @@ jobs:
             --json > results/tmp/compiler_region_zero_dead_affine.json
           cat results/tmp/compiler_region_zero_dead_affine.json
 
+      - name: Measure alternating semantic fixed point
+        run: |
+          python experiments/profile_combined_fixedpoint.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_combined_fixedpoint.json
+          cat results/tmp/compiler_combined_fixedpoint.json
+
       - name: Differentially verify partition combined pass
         env:
           PYTHONPATH: translator/pybf
@@ -184,4 +197,5 @@ jobs:
           name: dead-affine-followup
           path: |
             results/tmp/compiler_region_zero_dead_affine.json
+            results/tmp/compiler_combined_fixedpoint.json
             results/tmp/*.region-zero-dead-affine.bf
