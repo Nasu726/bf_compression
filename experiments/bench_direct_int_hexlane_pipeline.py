@@ -13,17 +13,15 @@ byte is divided by two four times at runtime: the four observed parity bits form
 the low nibble, and the residual quotient is the high nibble. This avoids the
 64-Boolean-bit expansion used by the current Quad path.
 
-The production packed decimal parser is intentionally runtime-heavy.  Long
-19/20-digit boundary inputs can exceed hundreds of millions of interpreter
-steps even though the emitted source is compact.  Therefore verification is
-split into:
+Parser and printer workspaces are deliberately disjoint. The compact printer's
+temporary division chain assumes untouched zero-initialized cells; reusing the
+parser workspace without a scrub violates that precondition and can make the
+reverse walk run on stale metadata.
 
-* short textual inputs for the complete parser -> HexLane -> printer pipeline;
-* direct packed-value boundary cases for the new Packed -> HexLane -> printer
-  composition, including signed 64-bit extrema.
-
-This keeps source-size research independent of the legacy parser's runtime
-cost while still validating the new representation boundary on hard values.
+The production packed decimal parser is intentionally runtime-heavy. Long
+19/20-digit boundary inputs can be much slower than the representation boundary,
+so verification is split into short textual end-to-end cases and direct packed
+boundary values.
 """
 
 import json
@@ -48,6 +46,7 @@ LINE_OPEN = 54
 GATE = 55
 SCRATCH_BASE = 64
 WORKSPACE_BASE = 80
+PRINT_WORKSPACE_BASE = 256
 
 
 def _packed_to_hexlane_destructive(
@@ -56,7 +55,6 @@ def _packed_to_hexlane_destructive(
     dst: HexLaneI64Ref,
 ) -> None:
     """Consume eight packed bytes into sixteen little-endian nibbles."""
-
     shared_gate = dst.marker(DIGITS)
     bf.clear(shared_gate)
     bf.clear(dst.value(DIGITS))
@@ -76,28 +74,23 @@ def _packed_to_hexlane_destructive(
         for within in range(4):
             bf.clear(quotient)
             bf.clear(parity)
-
             bf.begin_while(byte)
             bf.add_const(byte, -1)
             bf.set_const(shared_gate, 1)
-
             bf.begin_while(parity)
             bf.add_const(parity, -1)
             bf.clear(shared_gate)
             bf.add_const(quotient, 1)
             bf.end_while(parity)
-
             bf.begin_while(shared_gate)
             bf.add_const(shared_gate, -1)
             bf.add_const(parity, 1)
             bf.end_while(shared_gate)
             bf.end_while(byte)
-
             bf.begin_while(parity)
             bf.add_const(parity, -1)
             bf.add_const(low, 1 << within)
             bf.end_while(parity)
-
             bf.begin_while(quotient)
             bf.add_const(quotient, -1)
             bf.add_const(byte, 1)
@@ -107,7 +100,6 @@ def _packed_to_hexlane_destructive(
         bf.add_const(byte, -1)
         bf.add_const(high, 1)
         bf.end_while(byte)
-
         bf.clear(quotient)
         bf.clear(parity)
         bf.clear(shared_gate)
@@ -121,12 +113,7 @@ def build_hexlane_direct_int() -> str:
 
     backend.packed64.clear(token)
     bf.set_const(LINE_OPEN, 1)
-    backend.read_packed_s64_line_token(
-        token,
-        HAS_TOKEN,
-        END_LINE,
-        WORKSPACE_BASE,
-    )
+    backend.read_packed_s64_line_token(token, HAS_TOKEN, END_LINE, WORKSPACE_BASE)
 
     backend.copy_cell(END_LINE, GATE, backend.s0)
     bf.begin_while(GATE)
@@ -136,24 +123,22 @@ def build_hexlane_direct_int() -> str:
     backend.drain_to_line_end(LINE_OPEN, WORKSPACE_BASE)
 
     _packed_to_hexlane_destructive(bf, token, value)
-    print_hexlane_s64_compact(bf, value, WORKSPACE_BASE)
+    print_hexlane_s64_compact(bf, value, PRINT_WORKSPACE_BASE)
 
     bf.set_const(token.byte(0), 10)
     bf.move(token.byte(0))
     bf.emit(".")
-
     return optimize_bf(bf.code())
 
 
 def build_boundary_case(value: int) -> str:
-    """Build only Packed constant -> HexLane -> signed decimal output."""
     bf = BFEmitter()
     token = PackedI64Ref(TOKEN_BASE)
     word = HexLaneI64Ref(HEX_BASE)
     backend = BinaryStringListIO(bf, scratch_base=SCRATCH_BASE)
     backend.packed64.set_u64(token, value & MASK64)
     _packed_to_hexlane_destructive(bf, token, word)
-    print_hexlane_s64_compact(bf, word, WORKSPACE_BASE)
+    print_hexlane_s64_compact(bf, word, PRINT_WORKSPACE_BASE)
     return optimize_bf(bf.code())
 
 
@@ -183,12 +168,7 @@ def verify_short_end_to_end(code: str) -> dict[str, int]:
     }
     max_steps = 0
     for raw_input, expected in cases.items():
-        result = run_bf(
-            code,
-            input_data=raw_input,
-            memory_size=900,
-            step_limit=150_000_000,
-        )
+        result = run_bf(code, input_data=raw_input, memory_size=900, step_limit=30_000_000)
         assert result.output == expected, (raw_input, result.output, expected)
         max_steps = max(max_steps, result.steps)
     return {"cases": len(cases), "max_steps": max_steps}
@@ -196,19 +176,8 @@ def verify_short_end_to_end(code: str) -> dict[str, int]:
 
 def verify_boundary_values() -> dict[str, int]:
     values = [
-        0,
-        1,
-        15,
-        16,
-        255,
-        256,
-        123456789,
-        -123456789,
-        (1 << 31) - 1,
-        1 << 31,
-        (1 << 63) - 1,
-        -(1 << 63),
-        -1,
+        0, 1, 15, 16, 255, 256, 123456789, -123456789,
+        (1 << 31) - 1, 1 << 31, (1 << 63) - 1, -(1 << 63), -1,
     ]
     max_steps = 0
     max_bytes = 0
@@ -219,11 +188,7 @@ def verify_boundary_values() -> dict[str, int]:
         assert result.output == expected, (value, result.output, expected)
         max_steps = max(max_steps, result.steps)
         max_bytes = max(max_bytes, len(code))
-    return {
-        "cases": len(values),
-        "max_steps": max_steps,
-        "max_optimized_bytes": max_bytes,
-    }
+    return {"cases": len(values), "max_steps": max_steps, "max_optimized_bytes": max_bytes}
 
 
 def main() -> None:
@@ -242,11 +207,12 @@ def main() -> None:
         "verification": {
             "short_end_to_end": short_verification,
             "packed_boundary_pipeline": boundary_verification,
-            "note": "Long decimal text boundaries are excluded from end-to-end runtime checks because the unchanged packed parser is intentionally runtime-heavy.",
         },
         "layout": {
             "packed_input_cells": 8,
             "hexlane_persistent_cells": 34,
+            "parser_workspace_base": WORKSPACE_BASE,
+            "print_workspace_base": PRINT_WORKSPACE_BASE,
             "decimal_temp_record_stride": 25,
         },
     }
