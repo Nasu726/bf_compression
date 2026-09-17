@@ -1,0 +1,147 @@
+name: bound-macro-theory
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify payload channels and synthetic grammar
+        run: |
+          python experiments/verify_bf_native_channel.py
+          python experiments/verify_bound_macro_grammar.py
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator
+      - name: Generate partition
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program
+          Path('results/tmp/compiler_partition.bf').write_text(build_partition_program(), encoding='ascii')
+          PY
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+      - name: Generate streaming
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+      - name: Generate generic cases
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              Path(f'results/tmp/compiler_{name}.bf').write_text(
+                  compile_source(dedent(source)), encoding='ascii'
+              )
+          PY
+
+      - name: Verify exact grammar reconstruction on compiler artifacts
+        run: |
+          python experiments/verify_bound_macro_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+
+      - name: Profile source-native bound macros
+        run: |
+          python experiments/profile_bound_macro_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_bound_macro_v2.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_bound_macro_v2.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          bit=sum(r['best']['bf_native_loader_chars'] for r in rows)
+          byte=sum(r['best']['direct_byte_loader_chars'] for r in rows)
+          ext_size=sum(r['best']['ext_lzss_bytes'] for r in rows)
+          ext_bit=sum(r['best']['ext_lzss_bit_loader_chars'] for r in rows)
+          best=sum(r['best']['best_loader_chars'] for r in rows)
+          print(f'total={total:,} target={target:,}')
+          print(f'bound_payload={payload:,}')
+          print(f'prefix16_loader={bit:,} budget={target-bit:,}')
+          print(f'direct_byte_loader={byte:,} budget={target-byte:,}')
+          print(f'ext_lzss_payload={ext_size:,} ext_lzss_prefix16_loader={ext_bit:,} budget={target-ext_bit:,}')
+          print(f'per_artifact_best_loader={best:,} budget={target-best:,}')
+          for r in rows:
+              b=r['best']
+              print(
+                  f"{r['name']}: payload={b['payload_bytes']:,} loader={b['best_loader_chars']:,} "
+                  f"via={b['best_loader_channel']} R={b['max_rules']} params={b['initial_parameter_occurrences']:,}->{b['stored_parameter_values']:,}"
+              )
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bound-macro-theory
+          path: results/tmp/compiler_bound_macro_v2.json
