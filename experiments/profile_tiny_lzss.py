@@ -1,19 +1,21 @@
 from __future__ import annotations
 
-"""Measure a deliberately tiny, BF-plausible LZSS codec on semantic VM payloads.
+"""Measure deliberately tiny, BF-plausible LZSS codecs on semantic VM payloads.
 
-The format is intentionally much simpler than DEFLATE/LZMA:
+Both formats use groups of eight items with one control byte (1=literal,
+0=back-reference) and a 4096-byte window.
 
-* ULEB uncompressed length;
-* groups of up to eight items, preceded by one control byte;
-* control bit 1 = one literal byte;
-* control bit 0 = a two-byte back-reference;
-* back-reference: 12-bit distance 1..4096 and 4-bit length code 3..18.
+``fixed18``:
+  every match is two bytes: 12-bit distance + 4-bit length 3..18.
 
-A decoder therefore needs only: control-bit iteration, literal append, and a
-bounded backwards copy.  There are no Huffman tables or adaptive models.  The
-reported BF-native source cost is the *actual literal payload-constructor* cost
-under ``profile_bf_native_channel``.  Decoder/VM source is still extra.
+``ext273``:
+  length nibble 0..14 means 3..17; nibble 15 means an extra byte follows and
+  the match length is 18..273.  This adds only one conditional read to a future
+  BF decoder while allowing long repeated grammar fragments to collapse.
+
+There are no Huffman tables/adaptive models.  The reported BF-native source cost
+is the actual literal payload-constructor cost.  Decoder/semantic-VM source is
+still extra.
 """
 
 from collections import defaultdict, deque, Counter
@@ -29,15 +31,17 @@ from region_zero_opt import canonicalize, parse, precanonicalize, strip_bf
 
 WINDOW = 4096
 MIN_MATCH = 3
-MAX_MATCH = 18
+FIXED_MAX = 18
+EXT_MAX = 273
 MAX_CANDIDATES = 96
 
 
-def tiny_lzss_encode(data: bytes) -> bytes:
+def _encode(data: bytes, *, extended: bool) -> bytes:
     out = bytearray(encode_uleb(len(data)))
     positions: dict[bytes, deque[int]] = defaultdict(deque)
     i = 0
     n = len(data)
+    max_match = EXT_MAX if extended else FIXED_MAX
 
     def add_pos(pos: int) -> None:
         if pos + MIN_MATCH > n:
@@ -68,7 +72,7 @@ def tiny_lzss_encode(data: bytes) -> bytes:
                         dist = i - pos
                         if dist <= 0 or dist > WINDOW:
                             continue
-                        limit = min(MAX_MATCH, n - i)
+                        limit = min(max_match, n - i)
                         length = MIN_MATCH
                         while length < limit and data[pos + length] == data[i + length]:
                             length += 1
@@ -78,9 +82,15 @@ def tiny_lzss_encode(data: bytes) -> bytes:
                             if length == limit:
                                 break
             if best_len >= MIN_MATCH:
-                code = ((best_dist - 1) << 4) | (best_len - MIN_MATCH)
+                if extended and best_len >= 18:
+                    nibble = 15
+                else:
+                    nibble = best_len - MIN_MATCH
+                code = ((best_dist - 1) << 4) | nibble
                 items.append(code & 255)
                 items.append((code >> 8) & 255)
+                if extended and nibble == 15:
+                    items.append(best_len - 18)
                 start = i
                 i += best_len
                 for p in range(start, i):
@@ -95,6 +105,14 @@ def tiny_lzss_encode(data: bytes) -> bytes:
     return bytes(out)
 
 
+def tiny_lzss_encode(data: bytes) -> bytes:
+    return _encode(data, extended=False)
+
+
+def tiny_lzss_ext_encode(data: bytes) -> bytes:
+    return _encode(data, extended=True)
+
+
 def decode_uleb(blob: bytes, pos: int = 0) -> tuple[int, int]:
     value = shift = 0
     while True:
@@ -106,7 +124,7 @@ def decode_uleb(blob: bytes, pos: int = 0) -> tuple[int, int]:
         shift += 7
 
 
-def tiny_lzss_decode(blob: bytes) -> bytes:
+def _decode(blob: bytes, *, extended: bool) -> bytes:
     target, pos = decode_uleb(blob)
     out = bytearray()
     while len(out) < target:
@@ -122,7 +140,12 @@ def tiny_lzss_decode(blob: bytes) -> bytes:
                 code = blob[pos] | (blob[pos + 1] << 8)
                 pos += 2
                 dist = (code >> 4) + 1
-                length = (code & 0xF) + MIN_MATCH
+                nibble = code & 0xF
+                if extended and nibble == 15:
+                    length = 18 + blob[pos]
+                    pos += 1
+                else:
+                    length = nibble + MIN_MATCH
                 if dist > len(out):
                     raise ValueError("invalid back-reference")
                 for _ in range(length):
@@ -130,6 +153,14 @@ def tiny_lzss_decode(blob: bytes) -> bytes:
                     if len(out) >= target:
                         break
     return bytes(out)
+
+
+def tiny_lzss_decode(blob: bytes) -> bytes:
+    return _decode(blob, extended=False)
+
+
+def tiny_lzss_ext_decode(blob: bytes) -> bytes:
+    return _decode(blob, extended=True)
 
 
 def loader_chars(blob: bytes) -> int:
@@ -143,16 +174,21 @@ def profile_text(text: str) -> dict[str, object]:
     rows = []
     for rules in (0, 16, 32, 64, 128, 256, 512, 1024):
         payload, meta = bpe_payload(tokens, rules)
-        encoded = tiny_lzss_encode(payload)
-        assert tiny_lzss_decode(encoded) == payload
-        rows.append({
-            "max_rules": rules,
-            "payload_bytes": len(payload),
-            "lzss_bytes": len(encoded),
-            "lzss_ratio": len(encoded) / len(payload) if payload else 0.0,
-            "bf_native_loader_chars": loader_chars(encoded),
-            **meta,
-        })
+        for fmt, encoder, decoder in (
+            ("fixed18", tiny_lzss_encode, tiny_lzss_decode),
+            ("ext273", tiny_lzss_ext_encode, tiny_lzss_ext_decode),
+        ):
+            encoded = encoder(payload)
+            assert decoder(encoded) == payload
+            rows.append({
+                "format": fmt,
+                "max_rules": rules,
+                "payload_bytes": len(payload),
+                "lzss_bytes": len(encoded),
+                "lzss_ratio": len(encoded) / len(payload) if payload else 0.0,
+                "bf_native_loader_chars": loader_chars(encoded),
+                **meta,
+            })
     best = min(rows, key=lambda r: r["bf_native_loader_chars"])
     return {
         "bf_bytes": len(raw),
@@ -178,7 +214,8 @@ def main() -> None:
             b = row["best"]
             print(
                 f"{row['name']}: bf={row['bf_bytes']:,} payload={b['payload_bytes']:,} "
-                f"lzss={b['lzss_bytes']:,} loader={b['bf_native_loader_chars']:,} @R{b['max_rules']}"
+                f"lzss={b['lzss_bytes']:,} loader={b['bf_native_loader_chars']:,} "
+                f"{b['format']} @R{b['max_rules']}"
             )
 
 
