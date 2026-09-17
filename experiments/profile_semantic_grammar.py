@@ -1,21 +1,25 @@
 from __future__ import annotations
 
-"""Build a simple straight-line grammar over semantic BF tokens.
+"""Build and measure a straight-line grammar over semantic BF tokens.
 
-This is closer to an executable macro dictionary than gzip/LZMA.  Pointer and
-arithmetic runs become semantic terminals, then global byte-pair replacement
-creates binary nonterminals usable as recursively expandable VM macros.
+Pointer/arithmetic runs become semantic terminals, then global byte-pair
+replacement creates binary nonterminals usable by a recursive VM.  In addition
+to the grammar size, this profiler serializes the grammar exactly and measures
+how much residual information remains after ordinary byte compression.
 
-The reported serialized payload is still NOT a complete BF program: a BF
-payload builder, grammar expander, and bytecode interpreter must be added before
-it counts as achieved source compression.
+The compressed sizes are NOT achieved BF source sizes.  They are information
+headroom proxies.  A standalone BF program still needs a payload constructor,
+decoder/grammar expander, semantic-token interpreter, and its own work tape.
 """
 
 import argparse
+import bz2
 from collections import Counter
 import json
+import lzma
+import math
 from pathlib import Path
-from typing import Hashable
+import zlib
 
 BF = frozenset("><+-.,[]")
 Token = tuple[str, int] | tuple[str]
@@ -54,20 +58,58 @@ def semantic_tokens(code: str) -> list[Token]:
     return out
 
 
-def uleb_size(value: int) -> int:
+def encode_uleb(value: int) -> bytes:
     assert value >= 0
-    out = 1
-    while value >= 128:
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
         value >>= 7
-        out += 1
-    return out
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
 
 
-def token_definition_size(tok: Token) -> int:
-    # One terminal opcode byte. M/A use separate sign opcodes, then magnitude.
-    if tok[0] in ("M", "A"):
-        return 1 + uleb_size(abs(int(tok[1])))
-    return 1
+def terminal_definition(tok: Token) -> bytes:
+    # Opcodes 0..7 are local to this serialized grammar format.
+    kind = tok[0]
+    if kind == "M":
+        value = int(tok[1])
+        return bytes([0 if value >= 0 else 1]) + encode_uleb(abs(value))
+    if kind == "A":
+        value = int(tok[1])
+        return bytes([2 if value >= 0 else 3]) + encode_uleb(abs(value))
+    opcode = {".": 4, ",": 5, "[": 6, "]": 7}[kind]
+    return bytes([opcode])
+
+
+def serialize_grammar(
+    terminals: list[Token], rules: list[tuple[int, int]], seq: list[int]
+) -> bytes:
+    out = bytearray()
+    out += encode_uleb(len(terminals))
+    out += encode_uleb(len(rules))
+    out += encode_uleb(len(seq))
+    for tok in terminals:
+        out += terminal_definition(tok)
+    for a, b in rules:
+        out += encode_uleb(a)
+        out += encode_uleb(b)
+    for symbol in seq:
+        out += encode_uleb(symbol)
+    return bytes(out)
+
+
+def three_bit_capacity_chars(blob_bytes: int) -> int:
+    """Chars needed if an 8-symbol source carried all payload bits perfectly.
+
+    This is only a coding-capacity floor for this exact blob, not a lower bound
+    on the shortest equivalent BF program: a better semantic representation may
+    contain fewer bits, and executable BF syntax cannot generally devote all
+    three bits per character to literal payload data.
+    """
+    return math.ceil(blob_bytes * 8 / 3)
 
 
 def bpe_grammar(tokens: list[Token], max_rules: int) -> dict[str, object]:
@@ -84,19 +126,15 @@ def bpe_grammar(tokens: list[Token], max_rules: int) -> dict[str, object]:
 
     rules: list[tuple[int, int]] = []
     replacement_counts: list[int] = []
-
     for _ in range(max_rules):
         if len(seq) < 2:
             break
         counts = Counter(zip(seq, seq[1:]))
         if not counts:
             break
-        # A binary rule costs two RHS symbol references in abstract grammar
-        # size. Replacing <=2 occurrences cannot reduce symbol count.
         pair, freq = counts.most_common(1)[0]
         if freq <= 2:
             break
-
         new_id = len(terminals) + len(rules)
         a, b = pair
         new_seq: list[int] = []
@@ -110,44 +148,38 @@ def bpe_grammar(tokens: list[Token], max_rules: int) -> dict[str, object]:
             else:
                 new_seq.append(seq[i])
                 i += 1
-
         if replaced <= 2:
             break
         rules.append((a, b))
         replacement_counts.append(replaced)
         seq = new_seq
 
-    # Serializable grammar format:
-    #   terminal_count, rule_count, start_length (ULEB each)
-    #   implicit terminal IDs 0..T-1, each terminal definition
-    #   implicit rule IDs T..T+R-1, each two ULEB symbol refs
-    #   start sequence as ULEB symbol refs
-    t = len(terminals)
-    r = len(rules)
-    payload = uleb_size(t) + uleb_size(r) + uleb_size(len(seq))
-    payload += sum(token_definition_size(tok) for tok in terminals)
-    payload += sum(uleb_size(a) + uleb_size(b) for a, b in rules)
-    payload += sum(uleb_size(s) for s in seq)
-
-    abstract_symbols = len(seq) + 2 * len(rules)
+    payload = serialize_grammar(terminals, rules, seq)
+    compressed = {
+        "zlib9": len(zlib.compress(payload, 9)),
+        "bz2_9": len(bz2.compress(payload, compresslevel=9)),
+        "lzma9": len(lzma.compress(payload, preset=9)),
+    }
     return {
         "input_tokens": len(tokens),
-        "terminal_kinds": t,
-        "rules": r,
+        "terminal_kinds": len(terminals),
+        "rules": len(rules),
         "start_symbols": len(seq),
-        "abstract_grammar_symbols": abstract_symbols,
-        "serialized_payload_bytes": payload,
+        "abstract_grammar_symbols": len(seq) + 2 * len(rules),
+        "serialized_payload_bytes": len(payload),
+        "payload_compressed_bytes": compressed,
+        "payload_three_bit_capacity_chars": {
+            key: three_bit_capacity_chars(size) for key, size in compressed.items()
+        },
         "replacement_counts": replacement_counts,
     }
 
 
 def profile_text(text: str, max_rules: int) -> dict[str, object]:
     code = strip_bf(text)
-    tokens = semantic_tokens(code)
-    grammar = bpe_grammar(tokens, max_rules=max_rules)
     return {
         "bf_bytes": len(code),
-        "grammar": grammar,
+        "grammar": bpe_grammar(semantic_tokens(code), max_rules=max_rules),
     }
 
 
@@ -171,8 +203,8 @@ def main() -> None:
             g = row["grammar"]
             print(
                 f"{row['name']}: bf={row['bf_bytes']:,} tokens={g['input_tokens']:,} "
-                f"rules={g['rules']} grammar_symbols={g['abstract_grammar_symbols']:,} "
-                f"payload={g['serialized_payload_bytes']:,}"
+                f"rules={g['rules']} payload={g['serialized_payload_bytes']:,} "
+                f"payload_lzma={g['payload_compressed_bytes']['lzma9']:,}"
             )
 
 
