@@ -1,0 +1,32 @@
+name: hexlane-direct-int
+
+on:
+  push:
+    branches: [exp/region-epochs]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: exp/hexlane-scalar
+          path: translator
+      - name: Build and verify direct int HexLane pipeline
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: |
+          mkdir -p results/tmp
+          python experiments/bench_direct_int_hexlane_pipeline.py \
+            > results/tmp/direct_int_hexlane_pipeline.json
+          cat results/tmp/direct_int_hexlane_pipeline.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: direct-int-hexlane-pipeline
+          path: results/tmp/direct_int_hexlane_pipeline.json
