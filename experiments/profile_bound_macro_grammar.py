@@ -2,25 +2,21 @@ from __future__ import annotations
 
 """Parameterized Re-Pair with constants bound into macro definitions.
 
-Naively sharing only opcode skeletons was a negative result: every numeric slot
-became a call parameter, leaving ~93k parameter occurrences on the current
-suite.  Compiler templates should instead bind values that are invariant across
-all occurrences of a macro and expose only the genuinely varying slots.
+Naively sharing only opcode skeletons is poor because every numeric slot becomes
+a call parameter.  This grammar recursively factors repeated adjacent semantic
+VM symbols, but for every rule it binds argument slots that are identical over
+all rule occurrences and passes only genuinely varying slots.
 
-This experiment starts from exact semantic-VM terminals.  Each terminal kind is
-a symbol whose occurrence carries its numeric arguments.  Repeated adjacent
-symbol pairs are factored recursively.  For a new rule R=(A,B):
+The representation is exactly reconstructible by induction over rule creation
+order.  Serialization includes all symbol IDs, masks, constants and remaining
+call arguments.  We report several *actual BF payload-constructor* costs:
 
-* concatenate A/B call arguments at every non-overlapping occurrence;
-* any argument slot identical in every occurrence is stored once in R;
-* only non-constant slots remain parameters of each R call.
+* direct-byte: serialized byte v is initialized directly into one zero cell;
+* prefix16-bit: arbitrary serialized bits use the verified near-capacity
+  16-symbol unequal-cost channel;
+* ext-LZSS + prefix16: a tiny fixed-window codec followed by the same channel.
 
-This is exactly reconstructible by induction over rule creation order.  It is a
-strictly more expressive executable grammar than ordinary BPE while avoiding
-"free parameters".  The serialization includes symbol IDs, binding masks,
-constant values, and all remaining call arguments; reported BF-native loader
-length is therefore a realizable payload-construction cost before adding the
-small grammar-threaded semantic VM.
+Decoder / grammar-threaded semantic-VM source is still extra.
 """
 
 from dataclasses import dataclass
@@ -32,9 +28,10 @@ import sys
 from typing import Hashable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from profile_bf_native_channel import loader_source_for_bytes
+from profile_bf_native_channel import direct_byte_loader_chars, loader_source_for_bytes
 from profile_parametric_vm import split_token, skeleton_definition
 from profile_semantic_vm import encode_uleb, semantic_tokens, zigzag
+from profile_tiny_lzss import tiny_lzss_ext_decode, tiny_lzss_ext_encode
 from region_zero_opt import canonicalize, parse, precanonicalize, strip_bf
 
 
@@ -100,6 +97,7 @@ def factor_once(
         return None
     vectors = [seq[i].args + seq[i + 1].args for i in positions]
     input_arity = len(vectors[0])
+    assert input_arity == arities[pair[0]] + arities[pair[1]]
     assert all(len(v) == input_arity for v in vectors)
     mask = tuple(all(v[j] == vectors[0][j] for v in vectors) for j in range(input_arity))
     constants = tuple(vectors[0][j] for j, fixed in enumerate(mask) if fixed)
@@ -161,7 +159,8 @@ def serialize(terminals, rules: list[RuleDef], seq: list[Occ]) -> bytes:
     return bytes(out)
 
 
-def profile_tokens(tokens, max_rules: int) -> dict[str, int]:
+def build_grammar(tokens, max_rules: int):
+    """Return exact (terminals, arities, rules, start sequence, initial params)."""
     terminals, arities, seq = build_initial(tokens)
     rules: list[RuleDef] = []
     initial_params = sum(len(o.args) for o in seq)
@@ -170,7 +169,6 @@ def profile_tokens(tokens, max_rules: int) -> dict[str, int]:
         if len(seq) < 2:
             break
         counts = Counter((seq[i].symbol, seq[i + 1].symbol) for i in range(len(seq) - 1))
-        # Try high-frequency candidates until one has >2 non-overlapping uses.
         chosen = None
         for pair, _freq in counts.most_common(64):
             if len(nonoverlap_positions(seq, pair)) > 2:
@@ -183,15 +181,9 @@ def profile_tokens(tokens, max_rules: int) -> dict[str, int]:
         if factored is None:
             break
         new_seq, rule = factored
-        # Keep a rule only if exact serialized payload does not grow.  This
-        # enforces the project's best-so-far monotonicity at the representation
-        # level rather than trusting pair frequency alone.
         before = serialize(terminals, rules, seq)
-        trial_rules = rules + [rule]
-        after = serialize(terminals, trial_rules, new_seq)
+        after = serialize(terminals, rules + [rule], new_seq)
         if len(after) > len(before):
-            # A frequent pair may be bad because it binds few constants.  Try
-            # several alternatives and choose the best exact payload delta.
             best = None
             for pair, _freq in counts.most_common(32):
                 f = factor_once(seq, pair, arities, new_symbol)
@@ -209,18 +201,40 @@ def profile_tokens(tokens, max_rules: int) -> dict[str, int]:
         arities.append(rule.arity)
         seq = new_seq
 
+    return terminals, arities, rules, seq, initial_params
+
+
+def profile_tokens(tokens, max_rules: int) -> dict[str, int | str]:
+    terminals, arities, rules, seq, initial_params = build_grammar(tokens, max_rules)
     payload = serialize(terminals, rules, seq)
+    ext = tiny_lzss_ext_encode(payload)
+    assert tiny_lzss_ext_decode(ext) == payload
     final_params = sum(len(o.args) for o in seq) + sum(len(r.constants) for r in rules)
-    bound_constants = sum(sum(r.constant_mask) * max(0, 1) for r in rules)
+    bit_loader = len(loader_source_for_bytes(payload)[0])
+    byte_loader = direct_byte_loader_chars(payload)
+    ext_bit_loader = len(loader_source_for_bytes(ext)[0])
+    ext_byte_loader = direct_byte_loader_chars(ext)
+    choices = {
+        "direct_byte": byte_loader,
+        "prefix16_bit": bit_loader,
+        "ext_lzss_prefix16": ext_bit_loader,
+        "ext_lzss_direct_byte": ext_byte_loader,
+    }
+    best_channel = min(choices, key=choices.get)
     return {
         "terminals": len(terminals),
         "rules": len(rules),
         "start_symbols": len(seq),
         "initial_parameter_occurrences": initial_params,
         "stored_parameter_values": final_params,
-        "rule_constant_bindings": bound_constants,
         "payload_bytes": len(payload),
-        "bf_native_loader_chars": len(loader_source_for_bytes(payload)[0]),
+        "direct_byte_loader_chars": byte_loader,
+        "bf_native_loader_chars": bit_loader,
+        "ext_lzss_bytes": len(ext),
+        "ext_lzss_bit_loader_chars": ext_bit_loader,
+        "ext_lzss_direct_byte_loader_chars": ext_byte_loader,
+        "best_loader_channel": best_channel,
+        "best_loader_chars": choices[best_channel],
     }
 
 
@@ -233,7 +247,7 @@ def profile_text(text: str) -> dict[str, object]:
         row = profile_tokens(tokens, limit)
         row["max_rules"] = limit
         sweep.append(row)
-    best = min(sweep, key=lambda r: r["bf_native_loader_chars"])
+    best = min(sweep, key=lambda r: int(r["best_loader_chars"]))
     return {
         "bf_bytes": len(raw),
         "semantic_tokens": len(tokens),
@@ -256,7 +270,10 @@ def main() -> None:
     else:
         for r in rows:
             b=r['best']
-            print(f"{r['name']}: payload={b['payload_bytes']:,} loader={b['bf_native_loader_chars']:,} params={b['stored_parameter_values']:,} rules={b['rules']}")
+            print(
+                f"{r['name']}: payload={b['payload_bytes']:,} best_loader={b['best_loader_chars']:,} "
+                f"via={b['best_loader_channel']} params={b['stored_parameter_values']:,} rules={b['rules']}"
+            )
 
 
 if __name__ == "__main__":
