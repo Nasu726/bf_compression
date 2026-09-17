@@ -14,6 +14,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Verify MinLA profiler
+        run: python experiments/verify_epoch_minla_bound.py
+
       - name: Check out partition compiler
         uses: actions/checkout@v4
         with:
@@ -129,7 +132,41 @@ jobs:
           print(f'target_10x={total//10}')
           PY
 
+      - name: Profile free-epoch MinLA routing lower bounds
+        run: |
+          python experiments/profile_epoch_minla_bound.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_epoch_minla.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_epoch_minla.json').read_text())
+          total = sum(r['canonical_bytes'] for r in rows)
+          nonmove = sum(r['nonmovement_bytes'] for r in rows)
+          move = sum(r['movement_bytes'] for r in rows)
+          adjacent = sum(r['all_adjacent_movement_lower_bound'] for r in rows)
+          rigorous = sum(r['rigorous_relaxed_movement_lower_bound'] for r in rows)
+          exact = sum(r['exact_epochs'] for r in rows)
+          epochs = sum(r['epochs'] for r in rows)
+          print(f'total={total} nonmovement={nonmove} movement={move}')
+          print(f'all_adjacent_movement_lb={adjacent}; result={nonmove+adjacent}')
+          print(f'minla_relaxed_movement_lb={rigorous}; result={nonmove+rigorous}')
+          print(f'exact_epochs={exact}/{epochs}')
+          for context in ('static','periodic','dynamic'):
+              cur = sum(r['contexts'][context]['current_movement_bytes'] for r in rows)
+              lb = sum(r['contexts'][context]['rigorous_relaxed_lower_bound'] for r in rows)
+              print(f'{context}: current={cur} relaxed_lb={lb}')
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: information-headroom
-          path: results/tmp/compiler_information_headroom.json
+          path: |
+            results/tmp/compiler_information_headroom.json
+            results/tmp/compiler_epoch_minla.json
