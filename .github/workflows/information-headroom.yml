@@ -132,6 +132,30 @@ jobs:
           print(f'target_10x={total//10}')
           PY
 
+      - name: Profile executable-dictionary grammar headroom
+        run: |
+          python experiments/profile_semantic_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-rules 128 --json > results/tmp/compiler_semantic_grammar.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_semantic_grammar.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          payload = sum(r['grammar']['serialized_payload_bytes'] for r in rows)
+          symbols = sum(r['grammar']['abstract_grammar_symbols'] for r in rows)
+          rules = sum(r['grammar']['rules'] for r in rows)
+          starts = sum(r['grammar']['start_symbols'] for r in rows)
+          print(f'grammar_payload={payload} ratio={payload/total:.4%}')
+          print(f'grammar_symbols={symbols} rules={rules} start_symbols={starts}')
+          PY
+
       - name: Profile free-epoch MinLA routing lower bounds
         run: |
           python experiments/profile_epoch_minla_bound.py \
@@ -169,4 +193,5 @@ jobs:
           name: information-headroom
           path: |
             results/tmp/compiler_information_headroom.json
+            results/tmp/compiler_semantic_grammar.json
             results/tmp/compiler_epoch_minla.json
