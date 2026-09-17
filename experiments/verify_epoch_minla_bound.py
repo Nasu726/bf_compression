@@ -27,10 +27,12 @@ def main() -> None:
     assert exact_minla(g) == 4
     assert star_lower_bound(g) <= 4
 
-    # Four-leaf star: center in the middle gives 1+1+2+2 = 6.
+    # Four-leaf star: exact optimum is 1+1+2+2 = 6.  The independent-star
+    # lower bound is 5 after double-count correction, so this also verifies
+    # that we do not accidentally present the cheap bound as exact.
     g = graph(5, [(0, 1, 1), (0, 2, 1), (0, 3, 1), (0, 4, 1)])
     assert exact_minla(g) == 6
-    assert star_lower_bound(g) == 6
+    assert star_lower_bound(g) == 5
 
     # Source-level example: current layout puts logical cell 4 far away, but
     # only cells {0,1,4} matter.  Free relayout can make 0 adjacent to both.
