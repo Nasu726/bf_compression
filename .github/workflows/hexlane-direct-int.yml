@@ -18,15 +18,28 @@ jobs:
           repository: Nasu726/Python_to_BF_Translator
           ref: exp/hexlane-scalar
           path: translator
-      - name: Build and verify direct int HexLane pipeline
+      - name: Profile direct int HexLane source size
         env:
           PYTHONPATH: translator/pybf:experiments
         run: |
           mkdir -p results/tmp
+          python experiments/profile_direct_int_hexlane_size.py \
+            > results/tmp/direct_int_hexlane_size.json
+          cat results/tmp/direct_int_hexlane_size.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: direct-int-hexlane-size
+          path: results/tmp/direct_int_hexlane_size.json
+      - name: Verify direct int HexLane execution
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: |
           python experiments/bench_direct_int_hexlane_pipeline.py \
             > results/tmp/direct_int_hexlane_pipeline.json
           cat results/tmp/direct_int_hexlane_pipeline.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: direct-int-hexlane-pipeline
           path: results/tmp/direct_int_hexlane_pipeline.json
+          if-no-files-found: ignore
