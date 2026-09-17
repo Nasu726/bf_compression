@@ -20,6 +20,9 @@ jobs:
       - name: Verify semantic VM summaries
         run: python experiments/verify_semantic_vm.py
 
+      - name: Verify tiny LZSS
+        run: python experiments/verify_tiny_lzss.py
+
       - name: Check out partition compiler
         uses: actions/checkout@v4
         with:
@@ -153,7 +156,71 @@ jobs:
               print(f'{kind}: loops={count:,}; original_literal_bytes={literal:,}')
           PY
 
+      - name: Profile parameterized macro representation
+        run: |
+          python experiments/profile_parametric_vm.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_parametric_vm.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_parametric_vm.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          loader = sum(r['best_direct']['bf_native_loader_chars'] for r in rows)
+          combined = sum(r['best_direct']['combined_bytes'] for r in rows)
+          params = sum(r['parameter_occurrences'] for r in rows)
+          print(f'parametric_total: bytes={combined:,}; loader={loader:,}; params={params:,}; target={total//10:,}')
+          for r in rows:
+              b = r['best_direct']
+              print(
+                  f"{r['name']}: skeletons={r['distinct_skeletons']} params={r['parameter_occurrences']:,} "
+                  f"combined={b['combined_bytes']:,} loader={b['bf_native_loader_chars']:,} "
+                  f"@R{b['max_rules']} {b['parameter_mode']}"
+              )
+          for codec in ('zlib9','bz2_9','lzma9'):
+              size = chars = 0
+              # Use the direct-best row only as a stable first comparison.
+              # A later profiler can optimize rule count per codec if needed.
+              for r in rows:
+                  b = r['best_direct']
+                  size += b['compressed_bytes'][codec]
+              print(f'parametric_{codec}_bytes={size:,}')
+          PY
+
+      - name: Profile tiny LZSS on semantic grammar
+        run: |
+          python experiments/profile_tiny_lzss.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_tiny_lzss.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_tiny_lzss.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          size = sum(r['best']['lzss_bytes'] for r in rows)
+          loader = sum(r['best']['bf_native_loader_chars'] for r in rows)
+          print(f'tiny_lzss_total: bytes={size:,}; loader={loader:,}; target={total//10:,}; decoder_budget={total//10-loader:,}')
+          for r in rows:
+              b = r['best']
+              print(f"{r['name']}: payload={b['payload_bytes']:,} lzss={b['lzss_bytes']:,} loader={b['bf_native_loader_chars']:,} @R{b['max_rules']}")
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: semantic-vm-headroom
-          path: results/tmp/compiler_semantic_vm.json
+          path: |
+            results/tmp/compiler_semantic_vm.json
+            results/tmp/compiler_parametric_vm.json
+            results/tmp/compiler_tiny_lzss.json
