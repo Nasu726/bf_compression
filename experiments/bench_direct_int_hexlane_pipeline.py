@@ -169,7 +169,7 @@ def verify(code: str) -> dict[str, int]:
     for raw_input, expected in cases.items():
         result = run_bf(
             code,
-            input_bytes=raw_input.encode(),
+            input_data=raw_input,
             memory_size=900,
             step_limit=500_000_000,
         )
