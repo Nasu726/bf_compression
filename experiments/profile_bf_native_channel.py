@@ -1,41 +1,38 @@
 from __future__ import annotations
 
-"""BF-native static payload channel with a proved source-cost model.
+"""BF-native static payload channels with proved source-cost models.
 
-A standalone Brainfuck program cannot read its own source.  Static compressed
+A standalone Brainfuck program cannot read its own source. Static compressed
 payload therefore has to be *constructed* on the tape by executable BF before a
 VM/decoder can consume it.
 
-This module studies a deliberately simple, fully realizable channel:
+Two fully realizable channels are measured.
 
-* the tape starts at zero;
-* one payload symbol is one fresh byte cell;
-* value v is written by the shorter of v '+' commands or (256-v) '-' commands;
-* '>' advances to the next fresh zero cell.
+Direct-byte channel
+-------------------
+One serialized payload byte is one fresh tape cell. Value ``v`` is written by
+the shorter of ``v`` pluses or ``256-v`` minuses, then ``>`` advances. Thus
 
-Thus a symbol v costs
+    c(v) = 1 + min(v, 256-v).
 
-    c(v) = 1 + min(v, 256-v)
+This needs no payload decoder at all: the semantic VM reads the serialized bytes
+directly. It can be especially good for structured formats dominated by small
+opcodes/ULEB values.
 
-BF source characters (apart from an O(1) final-cell convention).
-
-For arbitrary incompressible payload bits, unequal-cost coding gives channel
-capacity C determined by
+Generic-bit channel
+-------------------
+For arbitrary incompressible bits, unequal-cost coding over the same direct-cell
+alphabet has capacity C determined by
 
     sum_v 2**(-C*c(v)) = 1.
 
-We also expose a tiny 16-symbol *binary prefix code* whose decoder table is
-small enough to be realistic in BF.  The tree is not heuristic: the verifier
-exhaustively enumerates every full binary prefix-tree leaf-depth multiset with
-16 leaves and checks that the selected tree maximizes expected payload bits per
-literal BF source character for the 16 cheapest cell values.
-
-This is still only the payload-construction layer.  A complete compressed BF
-program additionally pays for its semantic VM/decoder.
+To keep the decoder tiny, we use only the 16 cheapest cell values and an actual
+binary prefix code. Its tree is not heuristic: CI exhaustively enumerates every
+full binary prefix-tree leaf-depth multiset with 16 leaves and verifies that the
+selected tree maximizes expected payload bits per BF source character.
 """
 
 from dataclasses import dataclass
-import math
 from functools import lru_cache
 from typing import Iterable
 
@@ -56,6 +53,15 @@ def direct_initializer_fragment(value: int) -> str:
     if value <= 128:
         return "+" * value + ">"
     return "-" * (256 - value) + ">"
+
+
+def direct_byte_loader_chars(blob: bytes) -> int:
+    """Exact source length for writing serialized bytes directly to fresh cells."""
+    return sum(cell_cost(value) for value in blob)
+
+
+def direct_byte_loader_source(blob: bytes) -> str:
+    return "".join(direct_initializer_fragment(value) for value in blob)
 
 
 def channel_capacity(tol: float = 1e-14) -> float:
@@ -96,9 +102,6 @@ def expected_rate(depths: Iterable[int], values: Iterable[int]) -> float:
     vs = sorted(values, key=lambda v: cell_cost(v))
     if len(ds) != len(vs):
         raise ValueError("depth/value count mismatch")
-    # For a complete prefix tree fed unbiased bits, a leaf at depth d occurs
-    # with probability 2^-d.  Rearrangement says cheapest cell costs should be
-    # assigned to the shallowest (most probable) leaves.
     numerator = sum((2.0 ** -d) * d for d in ds)
     denominator = sum((2.0 ** -d) * cell_cost(v) for d, v in zip(ds, vs))
     return numerator / denominator
@@ -118,7 +121,6 @@ def optimal_depths(leaves: int) -> tuple[tuple[int, ...], float]:
 
 
 def canonical_codes(depths: Iterable[int]) -> list[tuple[int, int]]:
-    """Return [(code, bit_length)] in nondecreasing length order."""
     lengths = sorted(depths)
     if not lengths:
         return []
@@ -140,8 +142,6 @@ class PrefixEntry:
     length: int
 
 
-# Exhaustively optimal for exactly 16 direct-cell symbols.  Keeping this fixed
-# makes the eventual BF decoder tiny and makes measurements reproducible.
 OPT16_DEPTHS = (1, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 7, 8, 9, 10, 10)
 
 
@@ -156,12 +156,6 @@ def _bit_string(blob: bytes) -> str:
 
 
 def encode_bits_to_cells(bits: str) -> tuple[list[int], int]:
-    """Parse unbiased payload bits with the fixed 16-leaf prefix code.
-
-    Returns (cell_values, padding_bits).  Zero padding is appended only to close
-    the final prefix-code word.  A real stream must separately communicate the
-    original bit length or have an intrinsic end marker.
-    """
     entries = prefix16_entries()
     by_word = {(f"{e.code:0{e.length}b}"): e.value for e in entries}
     prefixes = {word[:i] for word in by_word for i in range(1, len(word) + 1)}
@@ -196,7 +190,7 @@ def loader_source_for_bytes(blob: bytes) -> tuple[str, int]:
     return "".join(direct_initializer_fragment(v) for v in cells), padding
 
 
-def loader_chars_for_bytes(blob: bytes) -> tuple[int, int, int]:
+def loader_chars_for_bytes(blob: bytes) -> tuple[int, float, int]:
     source, padding = loader_source_for_bytes(blob)
     return len(source), len(source) - len(blob) * 8 / channel_capacity(), padding
 
