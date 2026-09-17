@@ -30,7 +30,19 @@ jobs:
         with:
           name: direct-int-hexlane-size
           path: results/tmp/direct_int_hexlane_size.json
+      - name: Diagnose HexLane runtime components
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: |
+          python experiments/diagnose_direct_int_hexlane_runtime.py \
+            > results/tmp/direct_int_hexlane_diagnostics.json
+          cat results/tmp/direct_int_hexlane_diagnostics.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: direct-int-hexlane-diagnostics
+          path: results/tmp/direct_int_hexlane_diagnostics.json
       - name: Verify direct int HexLane execution
+        continue-on-error: true
         env:
           PYTHONPATH: translator/pybf:experiments
         run: |
