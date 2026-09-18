@@ -228,3 +228,110 @@ Machine-readable summary: `results/source_attribution_summary_v1.json`.
 3. use one generic real artifact (direct integer input/output is the cleanest initial vertical slice) for the first integration because 99.18% of its raw source is backend-attributed;
 4. in parallel, prototype one runtime-lane version of a specialized hexadecimal kernel to quantify how much static nibble unrolling can be removed without yet changing the full stride-66 record ABI;
 5. only promote either path after complete-artifact differential correctness and literal-source measurements.
+
+
+## 2026-09-18 — Relational semantic macros and compression portfolios
+
+The macro track now has an exact round-trip representation that binds not only
+constants, but also translation relations among parameter slots.
+
+For a macro occurrence vector `p`, a slot may be represented as
+
+`p[j] = p[r] + delta`
+
+when the same signed difference holds for every observed occurrence of that
+macro.  References are restricted to earlier slots, so reconstruction is
+acyclic.  A slot is otherwise either a call-site parameter or a constant stored
+once in the macro definition.  Rule acceptance is still based on exact
+serialized payload size; an inferred relation is never accepted merely because
+it looks compiler-like.
+
+`experiments/verify_relational_macro_grammar.py` reconstructs the complete
+semantic-token stream and checks exact equality.  It passes on synthetic
+translation families and all seven compiler-generated artifacts.
+
+### Measured result
+
+On the 2,066,322-byte seven-artifact suite:
+
+- constant-binding macro + tiny extended LZSS + BF-native prefix loader:
+  **123,798 BF source chars** for the payload constructor;
+- relational macro + the same lightweight LZSS/channel:
+  **89,633 chars**;
+- exact 10x target: **206,632 chars**;
+- remaining aggregate budget for grammar decoder, semantic VM, tape
+  materialization/cleanup, and final-pointer restoration: **116,999 chars**.
+
+The selected relational grammars contain only **8,744 call-site parameter
+values** and 463 stored `+delta` relations.  This is substantially stronger
+than naively parameterizing every semantic operand.
+
+The per-artifact payload-constructor measurements are:
+
+- partition: 23,330;
+- ABC153 streaming: 13,052;
+- runtime character store/join: 14,328;
+- direct join: 2,300;
+- string-to-int: 12,912;
+- int-to-string: 12,268;
+- direct integer input: 11,443.
+
+These numbers are not yet complete compressed BF programs: decoder / VM /
+cleanup source is extra.
+
+### Layering is not monotonically beneficial
+
+Applying the already validated local semantic fixed point first changes the
+relational payload-loader total only from 89,633 to **89,452** chars.  Some
+artifacts improve and some get worse.  Local simplification can destroy the
+regular template structure that grammar compression exploits.
+
+Therefore the production architecture should be a **portfolio**, not a fixed
+sequence of every available pass.  Each candidate representation must preserve
+semantics independently; the compressor should retain the shortest final
+standard-BF candidate.
+
+With only the currently measured candidates
+
+1. constant-bound grammar on the original BF,
+2. relational grammar on the original BF,
+3. relational grammar after the local semantic fixed point,
+
+selecting the shortest candidate independently per artifact gives a payload
+constructor total of **87,403 chars**, leaving **119,229 chars** under the
+aggregate 10x target for the decoder/VM/cleanup layer.
+
+The selected paths are not uniform: this is evidence that special-purpose
+compressors should coexist with global grammar compression rather than being
+blindly chained.
+
+### Correctness obligation for a VM representation
+
+A grammar-threaded semantic VM may execute directly from compressed rules; it
+does not need to expand the original multi-megabyte BF source first.  However,
+the project equivalence criterion is stronger than output equality.  A final VM
+candidate must preserve:
+
+- termination/nontermination;
+- I/O sequence and input consumption;
+- final data pointer;
+- required final/live tape state;
+- left-boundary safety.
+
+Therefore VM metadata and compressed payload cannot simply remain as arbitrary
+extra state if the original ABI observes those cells.  The final source-size
+budget must include any materialization/cleanup epilogue needed to place virtual
+state into the original tape layout and restore the final pointer.
+
+### Next high-upside relation
+
+The next opportunity-first experiment is an affine run of macro calls.  If the
+same macro appears repeatedly with call vectors
+
+`a, a+d, a+2d, ...`
+
+(or with a short repeating symbol pattern whose corresponding argument vectors
+advance by a fixed delta), encode the whole run as one call-pattern definition,
+a count, an initial vector, and a step vector.  This composes run-length grammar
+ideas with relational parameter binding and is the natural generalization of
+the already validated runtime-lane transformations.
