@@ -177,6 +177,31 @@ jobs:
               )
           PY
 
+      - name: Profile structure-aware relational serialization
+        run: |
+          python experiments/verify_structural_macro_coding.py
+          python experiments/profile_structural_macro_coding.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_structural_macro_coding_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_structural_macro_coding_v1.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          loader=sum(r['best']['best_loader_chars'] for r in rows)
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          print(f'structural_coding_total: payload={payload:,}; loader={loader:,}; target={target:,}; budget={target-loader:,}')
+          for r in rows:
+              b=r['best']; e=r['best_entry']
+              print(f"{r['name']}: loader={b['best_loader_chars']:,} payload={b['payload_bytes']:,} R={e['max_rules']} back={b['backward_rules']} ctx={b['context_args']} symdelta={b['delta_symbols']}")
+          PY
+
       - name: Profile signed relational parameter binding
         run: |
           python experiments/verify_signed_relational_macro_grammar.py --max-rules 128 \
@@ -301,6 +326,7 @@ jobs:
             results/tmp/compiler_bound_macro_v2.json
             results/tmp/compiler_relational_macro_v1.json
             results/tmp/compiler_signed_relational_macro_v1.json
+            results/tmp/compiler_structural_macro_coding_v1.json
             results/tmp/compiler_layered_macro_v1.json
             results/tmp/compiler_affine_call_runs_v1.json
             results/tmp/compiler_periodic_call_runs_v1.json
