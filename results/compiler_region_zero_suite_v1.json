@@ -1,0 +1,154 @@
+{
+  "date": "2026-09-16",
+  "summary": {
+    "artifact_count": 7,
+    "baseline_bytes": 2066322,
+    "region_zero_bytes": 1944111,
+    "saved_bytes": 122211,
+    "saved_percent_weighted": 5.914421856806442,
+    "single_pass_fixed_point": true,
+    "handwritten_corpus_saved_bytes": 0,
+    "representative_full_state_differential_artifacts_passed": 7
+  },
+  "ablation": {
+    "shallow_relative_region_saved_bytes": 53891,
+    "shallow_share_of_total_percent": 44.09668425935718,
+    "additional_recursive_saved_bytes": 68320,
+    "recursive_share_of_total_percent": 55.90331574064282,
+    "interpretation": "Shallow relative-region analysis and recursive loop-body analysis are independent contributors. The shallow number is not a direct moving-exit-theorem attribution; it includes top-level dataflow recovered by removing the whole-program gate."
+  },
+  "followup_exact_value_clear": {
+    "description": "After region-zero, replace [-] by a shorter direct +/- path when its exact 8-bit entry value is known to be 1, 2, 254, or 255.",
+    "incremental_saved_bytes_across_suite": 0,
+    "rewritten_known_clears": 0,
+    "status": "negative result; keep as research evidence rather than Level-1 baseline"
+  },
+  "followup_exact_entry_affine_summary": {
+    "description": "After Level 1, profile flat pointer-balanced arithmetic loops whose control cell has an exact nonzero 8-bit entry value; solve c*k = -x (mod 256) and estimate a straight-line equivalent.",
+    "profitable_candidates": 18,
+    "estimated_incremental_saved_bytes": 36,
+    "estimated_incremental_percent_of_level1_output": 0.0018517461194345385,
+    "per_artifact_estimated_saved_bytes": {
+      "partition": 12,
+      "abc153_stream_n8_mixed": 10,
+      "char_runtime_store_join": 4,
+      "direct_join_input": 0,
+      "string_to_int": 2,
+      "int_to_string": 4,
+      "direct_int_input": 4
+    },
+    "status": "near-negative opportunity profile; do not implement broad exact-entry affine resynthesis now"
+  },
+  "artifacts": [
+    {
+      "name": "partition",
+      "translator_ref": "0851b624364013041faa001db55cf9b90447cdef",
+      "baseline_bytes": 363109,
+      "region_zero_bytes": 348310,
+      "saved_bytes": 14799,
+      "saved_percent": 4.075635690660381,
+      "surviving_moving_or_dynamic_barriers": 16,
+      "removed_known_zero_loops": 715,
+      "shallow_saved_bytes": 213,
+      "additional_recursive_saved_bytes": 14586,
+      "recursive_share_percent": 98.56071356172714,
+      "full_state_differential": "passed on 4 workloads"
+    },
+    {
+      "name": "abc153_stream_n8_mixed",
+      "translator_ref": "d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2",
+      "baseline_bytes": 297843,
+      "region_zero_bytes": 273901,
+      "saved_bytes": 23942,
+      "saved_percent": 8.038463217198323,
+      "surviving_moving_or_dynamic_barriers": 8,
+      "removed_known_zero_loops": 1082,
+      "shallow_saved_bytes": 3855,
+      "additional_recursive_saved_bytes": 20087,
+      "recursive_share_percent": 83.89858825494946,
+      "full_state_differential": "passed on representative mixed workload"
+    },
+    {
+      "name": "char_runtime_store_join",
+      "translator_ref": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+      "baseline_bytes": 430146,
+      "region_zero_bytes": 394308,
+      "saved_bytes": 35838,
+      "saved_percent": 8.33158973929782,
+      "surviving_moving_or_dynamic_barriers": 13,
+      "removed_known_zero_loops": 827,
+      "shallow_saved_bytes": 31371,
+      "additional_recursive_saved_bytes": 4467,
+      "recursive_share_percent": 12.464423237903901,
+      "full_state_differential": "passed for abcdef / index 3 -> abcXef"
+    },
+    {
+      "name": "direct_join_input",
+      "translator_ref": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+      "baseline_bytes": 38200,
+      "region_zero_bytes": 36069,
+      "saved_bytes": 2131,
+      "saved_percent": 5.5785340314136125,
+      "surviving_moving_or_dynamic_barriers": 0,
+      "removed_known_zero_loops": 5,
+      "all_original_loops_balanced": true,
+      "shallow_saved_bytes": 0,
+      "additional_recursive_saved_bytes": 2131,
+      "recursive_share_percent": 100.0,
+      "full_state_differential": "passed on representative abcdef input"
+    },
+    {
+      "name": "string_to_int",
+      "translator_ref": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+      "baseline_bytes": 341636,
+      "region_zero_bytes": 318274,
+      "saved_bytes": 23362,
+      "saved_percent": 6.83827231322226,
+      "surviving_moving_or_dynamic_barriers": 84,
+      "removed_known_zero_loops": 758,
+      "shallow_saved_bytes": 2803,
+      "additional_recursive_saved_bytes": 20559,
+      "recursive_share_percent": 88.00188340039381,
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "int_to_string",
+      "translator_ref": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+      "baseline_bytes": 401007,
+      "region_zero_bytes": 389952,
+      "saved_bytes": 11055,
+      "saved_percent": 2.7568097315009465,
+      "surviving_moving_or_dynamic_barriers": 69,
+      "removed_known_zero_loops": 621,
+      "shallow_saved_bytes": 7938,
+      "additional_recursive_saved_bytes": 3117,
+      "recursive_share_percent": 28.19538670284939,
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "direct_int_input",
+      "translator_ref": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+      "baseline_bytes": 194381,
+      "region_zero_bytes": 183297,
+      "saved_bytes": 11084,
+      "saved_percent": 5.702203404653747,
+      "surviving_moving_or_dynamic_barriers": 66,
+      "removed_known_zero_loops": 698,
+      "shallow_saved_bytes": 7711,
+      "additional_recursive_saved_bytes": 3373,
+      "recursive_share_percent": 30.431252255503427,
+      "full_state_differential": "passed on representative 123 input"
+    }
+  ],
+  "observations": [
+    "Every artifact was already passed through Python_to_BF_Translator's existing optimize_bf path before this research pass.",
+    "Every removed known-zero loop in this suite was structurally pointer-balanced.",
+    "The direct_join_input artifact starts with 826 balanced loops and no moving/dynamic loops, yet the recursive region-zero pass still saves 5.58%. Inspection of legacy bfopt shows its known-zero elimination is only applied at top-level and does not recursively optimize loop bodies.",
+    "All seven artifacts reach a fixed point after one productive pass; a second pass saves zero additional bytes.",
+    "Ablation attributes 53,891 saved bytes to shallow relative-region dataflow and an additional 68,320 bytes to recursive loop-body dataflow. Which side dominates varies strongly by artifact, so neither should be discarded.",
+    "Representative full-state differential checks now cover all seven compiler-generated artifacts: output, input consumption, final pointer, and full memory match between baseline and region-zero output.",
+    "The exact-value clear-shortening follow-up found zero eligible profitable clears after region-zero across all seven artifacts.",
+    "Exact-entry affine summary profiling found only 18 profitable candidates with 36 estimated bytes of total incremental saving, about 0.00185% of Level-1 output; broad exact-entry loop resynthesis is not justified by this corpus.",
+    "The four compact hand-written corpus programs still save zero bytes, so compiler-generated and hand-written BF should remain separate benchmark classes."
+  ]
+}

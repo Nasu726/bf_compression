@@ -1,0 +1,40 @@
+name: scalar-representation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify dense radix-16 scalar semantics
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_hex16_scalar.py
+      - name: Verify marker-nibble radix-16 scalar semantics
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_hexlane_scalar.py
+      - name: Compare scalar representations
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: |
+          mkdir -p results/tmp
+          python experiments/bench_scalar_representations.py \
+            > results/tmp/scalar_representation.json
+          cat results/tmp/scalar_representation.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scalar-representation
+          path: results/tmp/scalar_representation.json

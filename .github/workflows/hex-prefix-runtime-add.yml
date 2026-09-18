@@ -1,0 +1,28 @@
+name: hex-prefix-runtime-add
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/hex_prefix_runtime_add.py'
+      - 'experiments/verify_hex_prefix_runtime_add.py'
+      - '.github/workflows/hex-prefix-runtime-add.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify moving-lane destructive prefix add
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_hex_prefix_runtime_add.py

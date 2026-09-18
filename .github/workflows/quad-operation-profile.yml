@@ -1,0 +1,55 @@
+name: quad-operation-profile
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/profile_quad_backend_calls.py'
+      - 'experiments/profile_hex_specialized_kernels.py'
+      - '.github/workflows/quad-operation-profile.yml'
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Profile top-level backend emission
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python experiments/profile_quad_backend_calls.py \
+            > results/tmp/quad_backend_profile.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('results/tmp/quad_backend_profile.json').read_text())
+          a = p['aggregate']
+          print('raw', a['raw_bytes'])
+          print('optimized', a['optimized_bytes'])
+          print('attributed_backend', a['attributed_backend_bytes'])
+          for name, row in list(a['methods'].items())[:20]:
+              print(name, row['calls'], row['bytes'], row['movement'])
+          PY
+      - name: Profile specialized stride-66 kernels
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          python experiments/profile_hex_specialized_kernels.py \
+            > results/tmp/hex_specialized_profile.json
+          cat results/tmp/hex_specialized_profile.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-attribution-profile
+          path: |
+            results/tmp/quad_backend_profile.json
+            results/tmp/hex_specialized_profile.json

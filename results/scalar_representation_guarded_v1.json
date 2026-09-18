@@ -1,0 +1,59 @@
+{
+  "method": "optimized(unknown-state guard + operation) - optimized(guard only)",
+  "translator_revision": "6dcc60c1d38b92be901acc4383a158d254c1ecda",
+  "verification": {
+    "hex16_differential_cases": 8,
+    "hexlane_differential_cases": 8,
+    "scalar_ci_run": 35137602172,
+    "status": "success"
+  },
+  "representations": {
+    "quad64": {
+      "word_cells": 99,
+      "copy": 2084,
+      "add": 6354,
+      "sub": 8797,
+      "uge": 13222,
+      "set_const": 412
+    },
+    "base4": {
+      "word_cells": 66,
+      "copy": 1161,
+      "add": 2987,
+      "sub": 2992,
+      "uge": 4622,
+      "set_const": 268
+    },
+    "hexlane": {
+      "word_cells": 34,
+      "copy": 617,
+      "add": 2371,
+      "sub": 2388,
+      "uge": 3950,
+      "set_const": 228
+    },
+    "hex16_plain": {
+      "word_cells": 16,
+      "shared_scratch_cells": 4,
+      "copy": 6266,
+      "add": 42500,
+      "sub": 42795,
+      "uge": 25388,
+      "set_const": 198
+    },
+    "packed_at_rest_existing": {
+      "word_cells": 8,
+      "copy": 1455,
+      "set_const": 518,
+      "add_via_preserving_quad_conversion": 267604
+    }
+  },
+  "hexlane_vs_quad_ratio": {
+    "copy": 0.29606525911708254,
+    "add": 0.37315077116776835,
+    "sub": 0.2714561782425827,
+    "uge": 0.29874451671456664,
+    "set_const": 0.5533980582524272
+  },
+  "interpretation": "HexLane is Pareto-better than Base4 on physical word width and all five measured source-size primitives. Plain dense Hex16 is a negative result for general arithmetic because Python-unrolled nibble operations overwhelm its storage-density advantage."
+}
