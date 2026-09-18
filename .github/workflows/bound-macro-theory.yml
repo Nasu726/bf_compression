@@ -177,6 +177,42 @@ jobs:
               )
           PY
 
+      - name: Profile signed relational parameter binding
+        run: |
+          python experiments/verify_signed_relational_macro_grammar.py --max-rules 128 \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+          python experiments/profile_signed_relational_macro_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_signed_relational_macro_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_signed_relational_macro_v1.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          ext=sum(r['best']['ext_lzss_bytes'] for r in rows)
+          loader=sum(r['best']['best_loader_chars'] for r in rows)
+          call=sum(r['best']['call_parameter_values'] for r in rows)
+          plus=sum(r['best']['add_relation_definitions'] for r in rows)
+          neg=sum(r['best']['negadd_relation_definitions'] for r in rows)
+          print(f'signed_relational_total: payload={payload:,}; ext_lzss={ext:,}; loader={loader:,}; target={target:,}; budget={target-loader:,}; call_params={call:,}; plus_rel={plus:,}; neg_rel={neg:,}')
+          for r in rows:
+              b=r['best']
+              print(f"{r['name']}: loader={b['best_loader_chars']:,} payload={b['payload_bytes']:,} call={b['call_parameter_values']:,} +rel={b['add_relation_definitions']:,} -rel={b['negadd_relation_definitions']:,} R={b['max_rules']}")
+          PY
+
       - name: Profile affine macro-call runs
         run: |
           python experiments/verify_affine_call_runs.py \
@@ -264,6 +300,7 @@ jobs:
           path: |
             results/tmp/compiler_bound_macro_v2.json
             results/tmp/compiler_relational_macro_v1.json
+            results/tmp/compiler_signed_relational_macro_v1.json
             results/tmp/compiler_layered_macro_v1.json
             results/tmp/compiler_affine_call_runs_v1.json
             results/tmp/compiler_periodic_call_runs_v1.json
