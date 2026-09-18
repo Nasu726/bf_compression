@@ -229,21 +229,33 @@ def build_grammar(tokens, max_rules: int):
 
         new_symbol = len(terminals) + len(rules)
         before = serialize(terminals, rules, seq)
-        best = None
-        # Exact serialized-size selection, not pair-frequency selection.
-        for pair in candidates[:32]:
-            factored = factor_once(seq, pair, arities, new_symbol)
-            if factored is None:
-                continue
-            seq2, rule = factored
-            payload2 = serialize(terminals, rules + [rule], seq2)
-            gain = len(before) - len(payload2)
-            if best is None or gain > best[0]:
-                best = (gain, seq2, rule)
-        if best is None or best[0] <= 0:
-            break
 
-        _, seq, rule = best
+        # Fast path: Re-Pair's most frequent non-overlapping pair.  We still
+        # accept it only when exact serialized payload shrinks.
+        chosen = candidates[0]
+        factored = factor_once(seq, chosen, arities, new_symbol)
+        if factored is None:
+            break
+        seq2, rule = factored
+        gain = len(before) - len(serialize(terminals, rules + [rule], seq2))
+
+        # Frequency is only a heuristic.  If the first pair is not profitable
+        # after relation-definition overhead, inspect a bounded fallback set.
+        if gain <= 0:
+            best = None
+            for pair in candidates[1:16]:
+                f2 = factor_once(seq, pair, arities, new_symbol)
+                if f2 is None:
+                    continue
+                s2, r2 = f2
+                g2 = len(before) - len(serialize(terminals, rules + [r2], s2))
+                if best is None or g2 > best[0]:
+                    best = (g2, s2, r2)
+            if best is None or best[0] <= 0:
+                break
+            gain, seq2, rule = best
+
+        seq = seq2
         rules.append(rule)
         arities.append(rule.arity)
 
