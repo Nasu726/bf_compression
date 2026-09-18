@@ -65,6 +65,7 @@ def verify_tokens(tokens, max_rules=512):
     assert recovered == expected, (len(expected), len(recovered), rules[:3], seq[:3])
 
     relation_count = 0
+    neg_relation_count = 0
     for rid, rule in enumerate(rules):
         symbol = len(terminals) + rid
         assert arities[symbol] == rule.arity
@@ -73,7 +74,9 @@ def verify_tokens(tokens, max_rules=512):
             if spec.kind in (ADD, NEGADD):
                 assert 0 <= spec.ref < j
                 relation_count += 1
-    return len(rules), len(seq), relation_count
+                if spec.kind == NEGADD:
+                    neg_relation_count += 1
+    return len(rules), len(seq), relation_count, neg_relation_count
 
 
 def tokens_from_text(text: str):
@@ -92,8 +95,14 @@ def main() -> None:
         # Same two-MOVE template translated by base.  The second slot is always
         # first+3, so a correct relational rule can keep one call parameter.
         synthetic_tokens.extend([("M", base), ("M", base + 3)])
-    rules, start, rels = verify_tokens(synthetic_tokens, max_rules=64)
+    rules, start, rels, negs = verify_tokens(synthetic_tokens, max_rules=64)
     assert rels > 0, (rules, start, rels)
+
+    reflected = []
+    for base in range(-80, 81, 4):
+        reflected.extend([("M", base), ("M", 5 - base)])
+    rules, start, rels, negs = verify_tokens(reflected, max_rules=64)
+    assert negs > 0, (rules, start, rels, negs)
 
     synthetic_texts = [
         ">>>>+<<<<" * 40,
@@ -105,10 +114,10 @@ def main() -> None:
 
     for name in args.files:
         tokens = tokens_from_text(Path(name).read_text(encoding="ascii", errors="ignore"))
-        rules, start, rels = verify_tokens(tokens, max_rules=args.max_rules)
+        rules, start, rels, negs = verify_tokens(tokens, max_rules=args.max_rules)
         print(
-            f"{name}: relational round-trip ok tokens={len(tokens):,} "
-            f"rules={rules} start={start:,} add_relations={rels:,}"
+            f"{name}: signed-relational round-trip ok tokens={len(tokens):,} "
+            f"rules={rules} start={start:,} relations={rels:,} neg_relations={negs:,}"
         )
 
     print("relational macro grammar reconstruction: ok")
