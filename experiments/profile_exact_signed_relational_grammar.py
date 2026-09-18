@@ -62,7 +62,7 @@ def pair_positions(seq: list[Occ]):
     return out
 
 
-def candidate(seq, pair, positions, arities, new_symbol):
+def candidate(seq, pair, positions, arities, new_symbol, rule_count):
     vectors = [seq[i].args + seq[i + 1].args for i in positions]
     input_arity = arities[pair[0]] + arities[pair[1]]
     assert all(len(v) == input_arity for v in vectors)
@@ -77,7 +77,7 @@ def candidate(seq, pair, positions, arities, new_symbol):
     new_len = len(seq) - len(positions)
     header_delta = (
         len(encode_uleb(new_len)) - len(encode_uleb(len(seq)))
-        + len(encode_uleb(new_symbol + 1)) - len(encode_uleb(new_symbol))
+        + len(encode_uleb(rule_count + 1)) - len(encode_uleb(rule_count))
     )
     gain = before - after - rule_bytes(rule) - header_delta
     return gain, rule, free_slots
@@ -132,7 +132,7 @@ def build_grammar(tokens, max_rules):
         new_symbol = len(terminals) + len(rules)
         best = None
         for pair, positions in positions_by_pair.items():
-            gain, rule, free_slots = candidate(seq, pair, positions, arities, new_symbol)
+            gain, rule, free_slots = candidate(seq, pair, positions, arities, new_symbol, len(rules))
             if best is None or gain > best[0]:
                 best = (gain, pair, positions, rule, free_slots)
         if best is None or best[0] <= 0:
