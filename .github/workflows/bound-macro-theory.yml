@@ -177,6 +177,18 @@ jobs:
               )
           PY
 
+      - name: Select shortest candidate per artifact
+        run: |
+          python experiments/select_compression_portfolio.py \
+            --bound results/tmp/compiler_bound_macro_v2.json \
+            --relational results/tmp/compiler_relational_macro_v1.json \
+            --layered results/tmp/compiler_layered_macro_v1.json \
+            --json > results/tmp/compiler_compression_portfolio_v1.json
+          python experiments/select_compression_portfolio.py \
+            --bound results/tmp/compiler_bound_macro_v2.json \
+            --relational results/tmp/compiler_relational_macro_v1.json \
+            --layered results/tmp/compiler_layered_macro_v1.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: bound-macro-theory
@@ -184,3 +196,4 @@ jobs:
             results/tmp/compiler_bound_macro_v2.json
             results/tmp/compiler_relational_macro_v1.json
             results/tmp/compiler_layered_macro_v1.json
+            results/tmp/compiler_compression_portfolio_v1.json
