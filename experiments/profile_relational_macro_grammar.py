@@ -307,7 +307,7 @@ def profile_text(text: str) -> dict[str, object]:
     nodes = canonicalize(parse(precanonicalize(raw)))
     tokens = semantic_tokens(nodes, Counter())
     sweep = []
-    for limit in (0, 16, 32, 64, 128, 256, 512):
+    for limit in (0, 16, 32, 64, 128):
         row = profile_tokens(tokens, limit)
         row["max_rules"] = limit
         sweep.append(row)
