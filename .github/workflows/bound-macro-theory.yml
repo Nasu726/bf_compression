@@ -14,10 +14,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Verify payload channels and synthetic grammar
+      - name: Verify payload channels and synthetic grammars
         run: |
           python experiments/verify_bf_native_channel.py
           python experiments/verify_bound_macro_grammar.py
+          python experiments/verify_relational_macro_grammar.py
 
       - uses: actions/checkout@v4
         with:
@@ -104,6 +105,14 @@ jobs:
             results/tmp/compiler_string_to_int.bf \
             results/tmp/compiler_int_to_string.bf \
             results/tmp/compiler_direct_int_input.bf
+          python experiments/verify_relational_macro_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
 
       - name: Profile source-native bound macros
         run: |
@@ -141,7 +150,44 @@ jobs:
               )
           PY
 
+      - name: Profile relational parameter binding
+        run: |
+          python experiments/profile_relational_macro_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_relational_macro_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_relational_macro_v1.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          ext_size=sum(r['best']['ext_lzss_bytes'] for r in rows)
+          best=sum(r['best']['best_loader_chars'] for r in rows)
+          call_params=sum(r['best']['call_parameter_values'] for r in rows)
+          relations=sum(r['best']['add_relation_definitions'] for r in rows)
+          print(
+              f'relational_total: payload={payload:,}; ext_lzss={ext_size:,}; '
+              f'loader={best:,}; target={target:,}; budget={target-best:,}; '
+              f'call_params={call_params:,}; add_relations={relations:,}'
+          )
+          for r in rows:
+              b=r['best']
+              print(
+                  f"{r['name']}: payload={b['payload_bytes']:,} loader={b['best_loader_chars']:,} "
+                  f"via={b['best_loader_channel']} R={b['max_rules']} "
+                  f"call_params={b['call_parameter_values']:,} relations={b['add_relation_definitions']:,}"
+              )
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: bound-macro-theory
-          path: results/tmp/compiler_bound_macro_v2.json
+          path: |
+            results/tmp/compiler_bound_macro_v2.json
+            results/tmp/compiler_relational_macro_v1.json
