@@ -211,6 +211,41 @@ jobs:
               print(f"{r['name']}: loader={b['best_loader_chars']:,} payload={b['payload_bytes']:,} runs={b['affine_runs']:,} covered={b['run_covered_calls']:,} R={b['max_rules']}")
           PY
 
+      - name: Profile periodic affine macro-call patterns
+        run: |
+          python experiments/verify_periodic_call_runs.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+          python experiments/profile_periodic_call_runs.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8 --json > results/tmp/compiler_periodic_call_runs_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_periodic_call_runs_v1.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          loader=sum(r['best']['best_loader_chars'] for r in rows)
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          runs=sum(r['best']['affine_run_records'] for r in rows)
+          patterns=sum(r['best']['pattern_run_records'] for r in rows)
+          covered=sum(r['best']['run_covered_calls'] for r in rows)
+          print(f'periodic_call_run_total: payload={payload:,}; loader={loader:,}; target={target:,}; budget={target-loader:,}; affine_runs={runs:,}; pattern_runs={patterns:,}; covered_calls={covered:,}')
+          for r in rows:
+              b=r['best']
+              print(f"{r['name']}: loader={b['best_loader_chars']:,} runs={b['affine_run_records']:,} patterns={b['pattern_run_records']:,} covered={b['run_covered_calls']:,} R={b['max_rules']}")
+          PY
+
       - name: Select shortest candidate per artifact
         run: |
           python experiments/select_compression_portfolio.py \
@@ -231,4 +266,5 @@ jobs:
             results/tmp/compiler_relational_macro_v1.json
             results/tmp/compiler_layered_macro_v1.json
             results/tmp/compiler_affine_call_runs_v1.json
+            results/tmp/compiler_periodic_call_runs_v1.json
             results/tmp/compiler_compression_portfolio_v1.json
