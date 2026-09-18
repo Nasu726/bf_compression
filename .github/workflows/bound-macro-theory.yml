@@ -177,6 +177,41 @@ jobs:
               )
           PY
 
+      - name: Profile exact-gain signed relational grammar
+        run: |
+          python experiments/verify_exact_signed_relational_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+          python experiments/profile_exact_signed_relational_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_exact_signed_relational_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_exact_signed_relational_v1.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); target=total//10
+          loader=sum(r['best']['best_loader_chars'] for r in rows)
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          params=sum(r['best']['call_parameter_values'] for r in rows)
+          plus=sum(r['best']['plus_relations'] for r in rows)
+          neg=sum(r['best']['neg_relations'] for r in rows)
+          print(f'exact_signed_total: payload={payload:,}; loader={loader:,}; target={target:,}; budget={target-loader:,}; params={params:,}; +rel={plus:,}; -rel={neg:,}')
+          for r in rows:
+              b=r['best']
+              print(f"{r['name']}: loader={b['best_loader_chars']:,} payload={b['payload_bytes']:,} params={b['call_parameter_values']:,} +rel={b['plus_relations']:,} -rel={b['neg_relations']:,} R={b['max_rules']}")
+          PY
+
       - name: Profile structure-aware relational serialization
         run: |
           python experiments/verify_structural_macro_coding.py
@@ -327,6 +362,7 @@ jobs:
             results/tmp/compiler_relational_macro_v1.json
             results/tmp/compiler_signed_relational_macro_v1.json
             results/tmp/compiler_structural_macro_coding_v1.json
+            results/tmp/compiler_exact_signed_relational_v1.json
             results/tmp/compiler_layered_macro_v1.json
             results/tmp/compiler_affine_call_runs_v1.json
             results/tmp/compiler_periodic_call_runs_v1.json
