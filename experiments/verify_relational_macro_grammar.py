@@ -81,6 +81,7 @@ def tokens_from_text(text: str):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="*")
+    ap.add_argument("--max-rules", type=int, default=128)
     args = ap.parse_args()
 
     synthetic_tokens = []
@@ -101,7 +102,7 @@ def main() -> None:
 
     for name in args.files:
         tokens = tokens_from_text(Path(name).read_text(encoding="ascii", errors="ignore"))
-        rules, start, rels = verify_tokens(tokens, max_rules=512)
+        rules, start, rels = verify_tokens(tokens, max_rules=args.max_rules)
         print(
             f"{name}: relational round-trip ok tokens={len(tokens):,} "
             f"rules={rules} start={start:,} add_relations={rels:,}"
