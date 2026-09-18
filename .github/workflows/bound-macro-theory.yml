@@ -7,7 +7,7 @@ on:
 jobs:
   profile:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,11 +45,7 @@ jobs:
         env:
           PYTHONPATH: translator_dynamic/pybf
         run: |
-          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
-            --n 8 --pattern mixed \
-            --program results/tmp/compiler_abc153_stream.bf \
-            --input results/tmp/compiler_abc153_stream.in \
-            --expected results/tmp/compiler_abc153_stream.expected
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py             --n 8 --pattern mixed             --program results/tmp/compiler_abc153_stream.bf             --input results/tmp/compiler_abc153_stream.in             --expected results/tmp/compiler_abc153_stream.expected
 
       - uses: actions/checkout@v4
         with:
@@ -97,34 +93,12 @@ jobs:
 
       - name: Verify exact grammar reconstruction on compiler artifacts
         run: |
-          python experiments/verify_bound_macro_grammar.py \
-            results/tmp/compiler_partition.bf \
-            results/tmp/compiler_abc153_stream.bf \
-            results/tmp/compiler_char_runtime_store.bf \
-            results/tmp/compiler_direct_join_input.bf \
-            results/tmp/compiler_string_to_int.bf \
-            results/tmp/compiler_int_to_string.bf \
-            results/tmp/compiler_direct_int_input.bf
-          python experiments/verify_relational_macro_grammar.py \
-            results/tmp/compiler_partition.bf \
-            results/tmp/compiler_abc153_stream.bf \
-            results/tmp/compiler_char_runtime_store.bf \
-            results/tmp/compiler_direct_join_input.bf \
-            results/tmp/compiler_string_to_int.bf \
-            results/tmp/compiler_int_to_string.bf \
-            results/tmp/compiler_direct_int_input.bf
+          python experiments/verify_bound_macro_grammar.py             results/tmp/compiler_partition.bf             results/tmp/compiler_abc153_stream.bf             results/tmp/compiler_char_runtime_store.bf             results/tmp/compiler_direct_join_input.bf             results/tmp/compiler_string_to_int.bf             results/tmp/compiler_int_to_string.bf             results/tmp/compiler_direct_int_input.bf
+          python experiments/verify_relational_macro_grammar.py --max-rules 128             results/tmp/compiler_partition.bf             results/tmp/compiler_abc153_stream.bf             results/tmp/compiler_char_runtime_store.bf             results/tmp/compiler_direct_join_input.bf             results/tmp/compiler_string_to_int.bf             results/tmp/compiler_int_to_string.bf             results/tmp/compiler_direct_int_input.bf
 
       - name: Profile source-native bound macros
         run: |
-          python experiments/profile_bound_macro_grammar.py \
-            results/tmp/compiler_partition.bf \
-            results/tmp/compiler_abc153_stream.bf \
-            results/tmp/compiler_char_runtime_store.bf \
-            results/tmp/compiler_direct_join_input.bf \
-            results/tmp/compiler_string_to_int.bf \
-            results/tmp/compiler_int_to_string.bf \
-            results/tmp/compiler_direct_int_input.bf \
-            --json > results/tmp/compiler_bound_macro_v2.json
+          python experiments/profile_bound_macro_grammar.py             results/tmp/compiler_partition.bf             results/tmp/compiler_abc153_stream.bf             results/tmp/compiler_char_runtime_store.bf             results/tmp/compiler_direct_join_input.bf             results/tmp/compiler_string_to_int.bf             results/tmp/compiler_int_to_string.bf             results/tmp/compiler_direct_int_input.bf             --json > results/tmp/compiler_bound_macro_v2.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -152,15 +126,7 @@ jobs:
 
       - name: Profile relational parameter binding
         run: |
-          python experiments/profile_relational_macro_grammar.py \
-            results/tmp/compiler_partition.bf \
-            results/tmp/compiler_abc153_stream.bf \
-            results/tmp/compiler_char_runtime_store.bf \
-            results/tmp/compiler_direct_join_input.bf \
-            results/tmp/compiler_string_to_int.bf \
-            results/tmp/compiler_int_to_string.bf \
-            results/tmp/compiler_direct_int_input.bf \
-            --json > results/tmp/compiler_relational_macro_v1.json
+          python experiments/profile_relational_macro_grammar.py             results/tmp/compiler_partition.bf             results/tmp/compiler_abc153_stream.bf             results/tmp/compiler_char_runtime_store.bf             results/tmp/compiler_direct_join_input.bf             results/tmp/compiler_string_to_int.bf             results/tmp/compiler_int_to_string.bf             results/tmp/compiler_direct_int_input.bf             --json > results/tmp/compiler_relational_macro_v1.json
           python - <<'PY'
           import json
           from pathlib import Path
@@ -185,9 +151,36 @@ jobs:
               )
           PY
 
+      - name: Profile layered local semantics plus relational macros
+        run: |
+          python experiments/profile_layered_macro_pipeline.py             results/tmp/compiler_partition.bf             results/tmp/compiler_abc153_stream.bf             results/tmp/compiler_char_runtime_store.bf             results/tmp/compiler_direct_join_input.bf             results/tmp/compiler_string_to_int.bf             results/tmp/compiler_int_to_string.bf             results/tmp/compiler_direct_int_input.bf             --json > results/tmp/compiler_layered_macro_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_layered_macro_v1.json').read_text())
+          total=sum(r['original_bf_bytes'] for r in rows); target=total//10
+          local=sum(r['post_local_bf_bytes'] for r in rows)
+          loader=sum(r['best']['best_loader_chars'] for r in rows)
+          ext=sum(r['best']['ext_lzss_bytes'] for r in rows)
+          rel=sum(r['best']['add_relation_definitions'] for r in rows)
+          print(
+              f'layered_total: original={total:,}; post_local={local:,}; '
+              f'ext_lzss={ext:,}; loader={loader:,}; target={target:,}; '
+              f'budget={target-loader:,}; add_relations={rel:,}'
+          )
+          for r in rows:
+              b=r['best']
+              print(
+                  f"{r['name']}: local={r['original_bf_bytes']:,}->{r['post_local_bf_bytes']:,} "
+                  f"loader={b['best_loader_chars']:,} via={b['best_loader_channel']} "
+                  f"R={b['max_rules']} relations={b['add_relation_definitions']:,}"
+              )
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: bound-macro-theory
           path: |
             results/tmp/compiler_bound_macro_v2.json
             results/tmp/compiler_relational_macro_v1.json
+            results/tmp/compiler_layered_macro_v1.json
