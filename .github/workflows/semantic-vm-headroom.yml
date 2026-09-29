@@ -1,0 +1,204 @@
+name: semantic-vm-headroom
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify BF-native payload channel
+        run: python experiments/verify_bf_native_channel.py
+      - name: Verify semantic VM summaries
+        run: python experiments/verify_semantic_vm.py
+      - name: Verify tiny LZSS
+        run: python experiments/verify_tiny_lzss.py
+
+      - name: Check out partition compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator
+      - name: Generate partition artifact
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program
+          Path('results/tmp/compiler_partition.bf').write_text(build_partition_program(), encoding='ascii')
+          PY
+
+      - name: Check out streaming compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+      - name: Generate streaming artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - name: Check out generic compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+      - name: Generate generic artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              Path(f'results/tmp/compiler_{name}.bf').write_text(
+                  compile_source(dedent(source)), encoding='ascii'
+              )
+          PY
+
+      - name: Profile semantic VM
+        run: |
+          python experiments/profile_semantic_vm.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_semantic_vm.json
+      - name: Summarize semantic VM source budgets
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_semantic_vm.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          print(f'total_bf={total:,}; target_10x={total//10:,}')
+          print(f'raw_vm_payload={sum(r["raw_vm_payload_bytes"] for r in rows):,}')
+          print(f'raw_vm_literal_loader={sum(r["raw_vm_bf_native_loader_chars"] for r in rows):,}')
+          best_payload = best_loader = 0
+          for row in rows:
+              best = min(row['grammar_sweep'], key=lambda x: x['payload_bytes'])
+              best_payload += best['payload_bytes']; best_loader += best['bf_native_loader_chars']
+              print(f"{row['name']}: bf={row['bf_bytes']:,} tokens={row['semantic_tokens']:,} best_payload={best['payload_bytes']:,}@R{best['max_rules']} loader={best['bf_native_loader_chars']:,}")
+          print(f'best_grammar_payload_total={best_payload:,}')
+          print(f'best_grammar_literal_loader_total={best_loader:,}')
+          for codec in ('zlib9','bz2_9','lzma9'):
+              total_chars = total_bytes = 0
+              for row in rows:
+                  best = min(row['grammar_sweep'], key=lambda x: x['compressed_bf_native_loader_chars'][codec])
+                  total_chars += best['compressed_bf_native_loader_chars'][codec]
+                  total_bytes += best['compressed_bytes'][codec]
+              print(f'{codec}: compressed_payload={total_bytes:,}; literal_loader={total_chars:,}')
+          for kind in ('CLEAR','AFFINE','LINEAR_LOOP','SCAN'):
+              count = sum(r['loop_stats'].get(f'{kind}_loops',0) for r in rows)
+              literal = sum(r['loop_stats'].get(f'{kind}_literal_bytes',0) for r in rows)
+              print(f'{kind}: loops={count:,}; original_literal_bytes={literal:,}')
+          PY
+
+      - name: Profile naive parameterized macro representation
+        run: |
+          python experiments/profile_parametric_vm.py \
+            results/tmp/compiler_partition.bf results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf --json > results/tmp/compiler_parametric_vm.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_parametric_vm.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows); loader=sum(r['best_direct']['bf_native_loader_chars'] for r in rows)
+          combined=sum(r['best_direct']['combined_bytes'] for r in rows); params=sum(r['parameter_occurrences'] for r in rows)
+          print(f'parametric_total: bytes={combined:,}; loader={loader:,}; params={params:,}; target={total//10:,}')
+          for codec in ('zlib9','bz2_9','lzma9'):
+              print(f'parametric_{codec}_bytes={sum(r["best_direct"]["compressed_bytes"][codec] for r in rows):,}')
+          PY
+
+      - name: Profile constant-binding macro grammar
+        run: |
+          python experiments/profile_bound_macro_grammar.py \
+            results/tmp/compiler_partition.bf results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf --json > results/tmp/compiler_bound_macro.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_bound_macro.json').read_text())
+          total=sum(r['bf_bytes'] for r in rows)
+          payload=sum(r['best']['payload_bytes'] for r in rows)
+          loader=sum(r['best']['bf_native_loader_chars'] for r in rows)
+          initial=sum(r['best']['initial_parameter_occurrences'] for r in rows)
+          stored=sum(r['best']['stored_parameter_values'] for r in rows)
+          print(f'bound_macro_total: payload={payload:,}; loader={loader:,}; target={total//10:,}; initial_params={initial:,}; stored_values={stored:,}')
+          for r in rows:
+              b=r['best']; print(f"{r['name']}: payload={b['payload_bytes']:,} loader={b['bf_native_loader_chars']:,} rules={b['rules']} params={b['initial_parameter_occurrences']:,}->{b['stored_parameter_values']:,}")
+          PY
+
+      - name: Profile tiny LZSS on semantic grammar
+        run: |
+          python experiments/profile_tiny_lzss.py \
+            results/tmp/compiler_partition.bf results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf --json > results/tmp/compiler_tiny_lzss.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_tiny_lzss.json').read_text()); total=sum(r['bf_bytes'] for r in rows)
+          size=sum(r['best']['lzss_bytes'] for r in rows); loader=sum(r['best']['bf_native_loader_chars'] for r in rows)
+          print(f'tiny_lzss_total: bytes={size:,}; loader={loader:,}; target={total//10:,}; decoder_budget={total//10-loader:,}')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: semantic-vm-headroom
+          path: |
+            results/tmp/compiler_semantic_vm.json
+            results/tmp/compiler_parametric_vm.json
+            results/tmp/compiler_bound_macro.json
+            results/tmp/compiler_tiny_lzss.json

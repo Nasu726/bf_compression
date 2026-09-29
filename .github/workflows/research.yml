@@ -1,0 +1,275 @@
+name: research
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  region-zero:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify region-zero transformations
+        run: python experiments/verify_region_zero.py
+
+      - name: Verify exact-value clear shortening
+        run: python experiments/verify_known_clear.py
+
+      - name: Verify exact affine summary arithmetic
+        run: python experiments/verify_exact_loop_summary.py
+
+      - name: Verify dead affine target profiling
+        run: python experiments/verify_dead_affine_targets.py
+
+      - name: Profile hand-written corpus
+        run: python experiments/profile_region_zero.py corpus/*.bf
+
+      - name: Check out compiler main
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator
+
+      - name: Generate partition compiler artifact
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program, partition_program_size_breakdown
+
+          code = build_partition_program()
+          Path('results/tmp/compiler_partition.bf').write_text(code, encoding='ascii')
+          print(f'compiler_partition_bytes={len(code)}')
+          print(f'compiler_partition_breakdown={partition_program_size_breakdown()}')
+          PY
+
+      - name: Profile partition compiler artifact
+        run: |
+          python experiments/profile_regions.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_regions.json
+          python experiments/profile_region_zero.py results/tmp/compiler_partition.bf --json > results/tmp/compiler_region_zero.json
+          cat results/tmp/compiler_region_zero.json
+
+      - name: Differentially verify partition compiler artifact
+        env:
+          PYTHONPATH: translator/pybf
+        run: python experiments/verify_compiler_partition.py results/tmp/compiler_partition.bf
+
+      - name: Check out streaming-list compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+
+      - name: Generate ABC153 streaming compiler artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - name: Profile ABC153 streaming compiler artifact
+        run: |
+          python experiments/profile_region_zero.py results/tmp/compiler_abc153_stream.bf --json > results/tmp/compiler_abc153_stream_region_zero.json
+          cat results/tmp/compiler_abc153_stream_region_zero.json
+
+      - name: Differentially verify ABC153 streaming compiler artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_abc153_stream.bf \
+            --input-file results/tmp/compiler_abc153_stream.in \
+            --expected-file results/tmp/compiler_abc153_stream.expected \
+            --memory-size 300000
+
+      - name: Check out string-conversion compiler branch
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+
+      - name: Generate string/conversion compiler artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              code = compile_source(dedent(source))
+              Path(f'results/tmp/compiler_{name}.bf').write_text(code, encoding='ascii')
+              print(f'{name}_bytes={len(code)}')
+
+          inputs = {
+              'char_runtime_store': 'abcdef\n3\n',
+              'direct_join_input': 'abcdef\n',
+              'string_to_int': '123\n',
+              'int_to_string': '123\n',
+              'direct_int_input': '123\n',
+          }
+          for name, data in inputs.items():
+              Path(f'results/tmp/compiler_{name}.in').write_text(data, encoding='ascii')
+
+          Path('results/tmp/compiler_char_runtime_store.expected').write_text('abcXef\n', encoding='ascii')
+          PY
+
+      - name: Profile string/conversion compiler artifacts
+        run: |
+          python experiments/profile_region_zero.py \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_string_region_zero.json
+          cat results/tmp/compiler_string_region_zero.json
+
+      - name: Measure fixed point across compiler artifacts
+        run: |
+          python experiments/profile_region_zero_fixedpoint.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_region_zero_fixedpoint.json
+          cat results/tmp/compiler_region_zero_fixedpoint.json
+
+      - name: Measure recursive-vs-shallow ablation
+        run: |
+          python experiments/profile_region_zero_ablation.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_region_zero_ablation.json
+          cat results/tmp/compiler_region_zero_ablation.json
+
+      - name: Measure exact-value clear shortening
+        run: |
+          python experiments/known_clear_opt.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_known_clear.json
+          cat results/tmp/compiler_known_clear.json
+
+      - name: Profile exact-entry affine loop summaries
+        run: |
+          python experiments/profile_exact_loop_summary.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_exact_loop_summary.json
+          cat results/tmp/compiler_exact_loop_summary.json
+
+      - name: Profile affine targets killed before observation
+        run: |
+          python experiments/profile_dead_affine_targets.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_dead_affine_targets.json
+          cat results/tmp/compiler_dead_affine_targets.json
+
+      - name: Differentially verify string/conversion artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_char_runtime_store.bf \
+            --input-file results/tmp/compiler_char_runtime_store.in \
+            --expected-file results/tmp/compiler_char_runtime_store.expected \
+            --memory-size 300000 & p1=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_direct_join_input.bf \
+            --input-file results/tmp/compiler_direct_join_input.in \
+            --memory-size 300000 & p2=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_string_to_int.bf \
+            --input-file results/tmp/compiler_string_to_int.in \
+            --memory-size 300000 & p3=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_int_to_string.bf \
+            --input-file results/tmp/compiler_int_to_string.in \
+            --memory-size 300000 & p4=$!
+          python experiments/verify_external_artifact.py \
+            results/tmp/compiler_direct_int_input.bf \
+            --input-file results/tmp/compiler_direct_int_input.in \
+            --memory-size 300000 & p5=$!
+          wait "$p1"
+          wait "$p2"
+          wait "$p3"
+          wait "$p4"
+          wait "$p5"
+
+      - name: Upload research outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: region-zero-research
+          path: |
+            results/tmp/*.json
+            results/tmp/*.expected
+            results/tmp/compiler_partition.bf
+            results/tmp/compiler_partition.region-zero.bf
+            results/tmp/compiler_abc153_stream.bf
+            results/tmp/compiler_abc153_stream.region-zero.bf
+            results/tmp/compiler_char_runtime_store.bf
+            results/tmp/compiler_char_runtime_store.region-zero.bf

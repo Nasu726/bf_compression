@@ -1,0 +1,134 @@
+{
+  "date": "2026-09-17",
+  "summary": {
+    "artifact_count": 7,
+    "baseline_bytes": 2066322,
+    "level1_bytes": 1944111,
+    "one_combined_cycle_bytes": 1943573,
+    "fixedpoint_bytes": 1942406,
+    "level1_saved_bytes": 122211,
+    "one_cycle_incremental_saved_after_level1": 538,
+    "fixedpoint_incremental_saved_after_level1": 1705,
+    "fixedpoint_extra_saved_after_one_cycle": 1167,
+    "total_saved_bytes": 123916,
+    "total_saved_percent_weighted": 5.996935617972417,
+    "incremental_percent_of_level1_output": 0.087700753712108,
+    "extra_percent_after_one_cycle": 0.060044052886102046,
+    "aggregate_cycle2_saved_bytes": 728,
+    "aggregate_cycle3_saved_bytes": 439,
+    "max_productive_cycles": 3,
+    "representative_full_state_differential_artifacts_passed": 7
+  },
+  "artifacts": [
+    {
+      "name": "partition",
+      "baseline_bytes": 363109,
+      "one_combined_cycle_bytes": 348294,
+      "fixedpoint_bytes": 348273,
+      "total_saved_bytes": 14836,
+      "total_saved_percent": 4.085825468385526,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 14815, "level1_saved_bytes": 14799, "dead_affine_saved_bytes": 16, "pruned_target_updates": 4},
+        {"cycle": 2, "saved_bytes": 14, "level1_saved_bytes": 13, "dead_affine_saved_bytes": 1, "pruned_target_updates": 1},
+        {"cycle": 3, "saved_bytes": 7, "level1_saved_bytes": 7, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 4, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on 4 workloads"
+    },
+    {
+      "name": "abc153_stream_n8_mixed",
+      "baseline_bytes": 297843,
+      "one_combined_cycle_bytes": 273676,
+      "fixedpoint_bytes": 273163,
+      "total_saved_bytes": 24680,
+      "total_saved_percent": 8.286244766538076,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 24167, "level1_saved_bytes": 23942, "dead_affine_saved_bytes": 225, "pruned_target_updates": 27},
+        {"cycle": 2, "saved_bytes": 297, "level1_saved_bytes": 129, "dead_affine_saved_bytes": 168, "pruned_target_updates": 24},
+        {"cycle": 3, "saved_bytes": 216, "level1_saved_bytes": 216, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 4, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative mixed workload"
+    },
+    {
+      "name": "char_runtime_store_join",
+      "baseline_bytes": 430146,
+      "one_combined_cycle_bytes": 394230,
+      "fixedpoint_bytes": 394054,
+      "total_saved_bytes": 36092,
+      "total_saved_percent": 8.390639457300544,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 35916, "level1_saved_bytes": 35838, "dead_affine_saved_bytes": 78, "pruned_target_updates": 10},
+        {"cycle": 2, "saved_bytes": 104, "level1_saved_bytes": 48, "dead_affine_saved_bytes": 56, "pruned_target_updates": 8},
+        {"cycle": 3, "saved_bytes": 72, "level1_saved_bytes": 72, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 4, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative abcdef / index 3 workload"
+    },
+    {
+      "name": "direct_join_input",
+      "baseline_bytes": 38200,
+      "one_combined_cycle_bytes": 36066,
+      "fixedpoint_bytes": 36061,
+      "total_saved_bytes": 2139,
+      "total_saved_percent": 5.599476439790576,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 2134, "level1_saved_bytes": 2131, "dead_affine_saved_bytes": 3, "pruned_target_updates": 1},
+        {"cycle": 2, "saved_bytes": 5, "level1_saved_bytes": 5, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 3, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative abcdef input"
+    },
+    {
+      "name": "string_to_int",
+      "baseline_bytes": 341636,
+      "one_combined_cycle_bytes": 318271,
+      "fixedpoint_bytes": 318266,
+      "total_saved_bytes": 23370,
+      "total_saved_percent": 6.840613986816378,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 23365, "level1_saved_bytes": 23362, "dead_affine_saved_bytes": 3, "pruned_target_updates": 1},
+        {"cycle": 2, "saved_bytes": 5, "level1_saved_bytes": 5, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 3, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "int_to_string",
+      "baseline_bytes": 401007,
+      "one_combined_cycle_bytes": 389814,
+      "fixedpoint_bytes": 389538,
+      "total_saved_bytes": 11469,
+      "total_saved_percent": 2.8600498245666532,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 11193, "level1_saved_bytes": 11055, "dead_affine_saved_bytes": 138, "pruned_target_updates": 30},
+        {"cycle": 2, "saved_bytes": 204, "level1_saved_bytes": 148, "dead_affine_saved_bytes": 56, "pruned_target_updates": 8},
+        {"cycle": 3, "saved_bytes": 72, "level1_saved_bytes": 72, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 4, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "direct_int_input",
+      "baseline_bytes": 194381,
+      "one_combined_cycle_bytes": 183222,
+      "fixedpoint_bytes": 183051,
+      "total_saved_bytes": 11330,
+      "total_saved_percent": 5.828758983645521,
+      "cycles": [
+        {"cycle": 1, "saved_bytes": 11159, "level1_saved_bytes": 11084, "dead_affine_saved_bytes": 75, "pruned_target_updates": 9},
+        {"cycle": 2, "saved_bytes": 99, "level1_saved_bytes": 43, "dead_affine_saved_bytes": 56, "pruned_target_updates": 8},
+        {"cycle": 3, "saved_bytes": 72, "level1_saved_bytes": 72, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0},
+        {"cycle": 4, "saved_bytes": 0, "level1_saved_bytes": 0, "dead_affine_saved_bytes": 0, "pruned_target_updates": 0}
+      ],
+      "full_state_differential": "passed on representative 123 input"
+    }
+  ],
+  "interpretation": [
+    "Forward known-zero propagation and conservative backward dead-target pruning are not independent one-shot passes: each can expose opportunities for the other.",
+    "All seven artifacts converged with at most three productive cycles, followed by a canonical no-change cycle.",
+    "The bounded research fixed-point implementation raises if it reaches its cycle bound without convergence or if a same-length canonical rewrite changes text, rather than silently returning an unproved approximation.",
+    "This repeated whole-program implementation is research evidence, not the production architecture. For the >512 KiB / roughly 10 second target, forward zero and backward demand should be fused or driven by changed-region/worklist scheduling instead of relying on repeated full rescans.",
+    "All seven fixed-point outputs passed representative full-state differential execution for output, input consumption, final pointer, and complete simulated memory on terminating workloads."
+  ]
+}

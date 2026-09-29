@@ -1,0 +1,52 @@
+name: self-extracting-delta-output
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/self_extracting_delta_output.py'
+      - 'experiments/verify_self_extracting_delta_output.py'
+      - 'experiments/self_extracting_linear_vm.py'
+      - 'experiments/verify_self_extracting_linear_vm.py'
+      - 'experiments/self_extracting_affine1.py'
+      - 'experiments/verify_self_extracting_affine1.py'
+      - 'experiments/self_extracting_balanced_nibble_channel.py'
+      - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
+      - 'experiments/self_extracting_balanced_octal_channel.py'
+      - 'experiments/verify_self_extracting_balanced_octal_channel.py'
+      - '.github/workflows/self-extracting-delta-output.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify self-cleaning fused delta-output executor
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_delta_output.py
+      - name: Verify self-cleaning straight-line semantic VM
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_linear_vm.py
+      - name: Verify data-driven affine semantic kernel
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_affine1.py
+      - name: Verify balanced-nibble payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_nibble_channel.py
+      - name: Verify balanced-octal payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_octal_channel.py

@@ -1,0 +1,41 @@
+name: hexlane-decimal-print
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/hexlane_decimal_print.py'
+      - 'experiments/verify_hexlane_decimal_print.py'
+      - 'experiments/bench_hexlane_decimal_print.py'
+      - '.github/workflows/hexlane-decimal-print.yml'
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify compact signed decimal printer
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_hexlane_decimal_print.py
+      - name: Compare decimal printer source cost
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: |
+          mkdir -p results/tmp
+          python experiments/bench_hexlane_decimal_print.py \
+            > results/tmp/hexlane_decimal_print.json
+          cat results/tmp/hexlane_decimal_print.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hexlane-decimal-print
+          path: results/tmp/hexlane_decimal_print.json

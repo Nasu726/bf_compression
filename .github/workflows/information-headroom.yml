@@ -1,0 +1,197 @@
+name: information-headroom
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify MinLA profiler
+        run: python experiments/verify_epoch_minla_bound.py
+
+      - name: Check out partition compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator
+
+      - name: Generate partition artifact
+        env:
+          PYTHONPATH: translator/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program
+          Path('results/tmp/compiler_partition.bf').write_text(build_partition_program(), encoding='ascii')
+          PY
+
+      - name: Check out streaming compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_dynamic
+
+      - name: Generate streaming artifact
+        env:
+          PYTHONPATH: translator_dynamic/pybf
+        run: |
+          python translator_dynamic/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - name: Check out generic compiler
+        uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_string
+
+      - name: Generate generic artifacts
+        env:
+          PYTHONPATH: translator_string/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              Path(f'results/tmp/compiler_{name}.bf').write_text(
+                  compile_source(dedent(source)), encoding='ascii'
+              )
+          PY
+
+      - name: Profile whole-program information headroom
+        run: |
+          python experiments/profile_information_headroom.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_information_headroom.json
+          cat results/tmp/compiler_information_headroom.json
+
+      - name: Summarize global entropy proxies
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_information_headroom.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          for key in ('zlib9', 'bz2_9', 'lzma9'):
+              size = sum(r['ascii_compressed'][key] for r in rows)
+              print(f'ascii_{key}={size} ratio={size/total:.4%}')
+          packed = sum(r['three_bit_packed_bytes'] for r in rows)
+          rle = sum(r['semantic_rle']['binary_bytes'] for r in rows)
+          print(f'three_bit_packed={packed} ratio={packed/total:.4%}')
+          print(f'semantic_rle={rle} ratio={rle/total:.4%}')
+          for key in ('zlib9', 'bz2_9', 'lzma9'):
+              size = sum(r['semantic_rle']['compressed'][key] for r in rows)
+              print(f'rle_{key}={size} ratio={size/total:.4%}')
+          print(f'total={total}')
+          print(f'target_10x={total//10}')
+          PY
+
+      - name: Profile executable-dictionary grammar headroom
+        run: |
+          python experiments/profile_semantic_grammar.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-rules 128 --json > results/tmp/compiler_semantic_grammar.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_semantic_grammar.json').read_text())
+          total = sum(r['bf_bytes'] for r in rows)
+          payload = sum(r['grammar']['serialized_payload_bytes'] for r in rows)
+          symbols = sum(r['grammar']['abstract_grammar_symbols'] for r in rows)
+          rules = sum(r['grammar']['rules'] for r in rows)
+          starts = sum(r['grammar']['start_symbols'] for r in rows)
+          print(f'grammar_payload={payload} ratio={payload/total:.4%}')
+          print(f'grammar_symbols={symbols} rules={rules} start_symbols={starts}')
+          PY
+
+      - name: Profile free-epoch MinLA routing lower bounds
+        run: |
+          python experiments/profile_epoch_minla_bound.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_epoch_minla.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows = json.loads(Path('results/tmp/compiler_epoch_minla.json').read_text())
+          total = sum(r['canonical_bytes'] for r in rows)
+          nonmove = sum(r['nonmovement_bytes'] for r in rows)
+          move = sum(r['movement_bytes'] for r in rows)
+          adjacent = sum(r['all_adjacent_movement_lower_bound'] for r in rows)
+          rigorous = sum(r['rigorous_relaxed_movement_lower_bound'] for r in rows)
+          exact = sum(r['exact_epochs'] for r in rows)
+          epochs = sum(r['epochs'] for r in rows)
+          print(f'total={total} nonmovement={nonmove} movement={move}')
+          print(f'all_adjacent_movement_lb={adjacent}; result={nonmove+adjacent}')
+          print(f'minla_relaxed_movement_lb={rigorous}; result={nonmove+rigorous}')
+          print(f'exact_epochs={exact}/{epochs}')
+          for context in ('static','periodic','dynamic'):
+              cur = sum(r['contexts'][context]['current_movement_bytes'] for r in rows)
+              lb = sum(r['contexts'][context]['rigorous_relaxed_lower_bound'] for r in rows)
+              print(f'{context}: current={cur} relaxed_lb={lb}')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: information-headroom
+          path: |
+            results/tmp/compiler_information_headroom.json
+            results/tmp/compiler_semantic_grammar.json
+            results/tmp/compiler_epoch_minla.json
