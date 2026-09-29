@@ -5,6 +5,8 @@ on:
     paths:
       - 'experiments/self_extracting_delta_output.py'
       - 'experiments/verify_self_extracting_delta_output.py'
+      - 'experiments/self_extracting_linear_vm.py'
+      - 'experiments/verify_self_extracting_linear_vm.py'
       - '.github/workflows/self-extracting-delta-output.yml'
   workflow_dispatch:
 
@@ -22,7 +24,11 @@ jobs:
           repository: Nasu726/Python_to_BF_Translator
           ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
           path: translator
-      - name: Verify self-cleaning data-driven executor
+      - name: Verify self-cleaning fused delta-output executor
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_self_extracting_delta_output.py
+      - name: Verify self-cleaning straight-line semantic VM
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_linear_vm.py
