@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-"""Profile affine periodic runs in relational semantic-macro call streams.
+"""Profile affine periodic runs in signed-relational semantic macro streams.
 
-This generalizes single-symbol affine RUN records to a short repeated pattern.
-For period p, block k must have the same symbol/arity pattern as block 0 and
-its argument vector at each pattern slot must be base + k*delta.  Periods 2..8
-and at least three repetitions are considered.  A dynamic program chooses the
-cheapest exact mixture of literals, single-symbol RUNs, and PATTERN_RUN records.
+This composes two independent compression axes:
+
+* signed relational rules bind p[j] = +/-p[r] + delta inside macros;
+* affine RUN / PATTERN_RUN records compress translated repetition in the start
+  sequence.
+
+The serializer is complete for PARAM / CONST / ADD / NEGADD rule slots.  Earlier
+research code accidentally omitted NEGADD reference/delta payload from this
+combined serializer; full serialized round-trip verification now guards against
+that class of bug.
 """
 
 import argparse
@@ -23,6 +28,7 @@ from profile_signed_relational_macro_grammar import ADD, CONST, NEGADD, Occ, Rul
 from profile_semantic_vm import encode_uleb, semantic_tokens
 from profile_tiny_lzss import tiny_lzss_ext_decode, tiny_lzss_ext_encode
 from region_zero_opt import canonicalize, parse, precanonicalize, strip_bf
+from self_extracting_balanced_octal_channel import total_channel_chars as octal_total_chars
 
 
 def pattern_bytes(escape: int, period: int, repeats: int, first: list[Occ], deltas: list[tuple[int, ...]]) -> bytes:
@@ -134,7 +140,7 @@ def serialize_with_patterns(terminals, rules: list[RuleDef], seq: list[Occ], max
         for j, spec in enumerate(rule.specs):
             if spec.kind == CONST:
                 out += enc_signed(spec.value)
-            elif spec.kind == ADD:
+            elif spec.kind in (ADD, NEGADD):
                 assert 0 <= spec.ref < j
                 out += encode_uleb(j - spec.ref - 1)
                 out += enc_signed(spec.value)
@@ -151,9 +157,11 @@ def profile_tokens(tokens, max_rules: int, max_period: int = 8):
     assert tiny_lzss_ext_decode(ext) == payload
     channels = {
         "direct_byte": direct_byte_loader_chars(payload),
-        "prefix16_bit": len(loader_source_for_bytes(payload)[0]),
-        "ext_lzss_prefix16": len(loader_source_for_bytes(ext)[0]),
+        "prefix16_constructor": len(loader_source_for_bytes(payload)[0]),
+        "balanced_octal_realized": octal_total_chars(payload),
+        "ext_lzss_prefix16_constructor": len(loader_source_for_bytes(ext)[0]),
         "ext_lzss_direct_byte": direct_byte_loader_chars(ext),
+        "ext_lzss_balanced_octal_channel": octal_total_chars(ext),
     }
     best_channel = min(channels, key=channels.get)
     return {
@@ -162,10 +170,13 @@ def profile_tokens(tokens, max_rules: int, max_period: int = 8):
         "affine_run_records": runs,
         "pattern_run_records": patterns,
         "run_covered_calls": covered,
+        "plus_relations": sum(1 for r in rules for s in r.specs if s.kind == ADD),
+        "neg_relations": sum(1 for r in rules for s in r.specs if s.kind == NEGADD),
         "payload_bytes": len(payload),
         "ext_lzss_bytes": len(ext),
-        "best_loader_channel": best_channel,
-        "best_loader_chars": channels[best_channel],
+        "channels": channels,
+        "best_loader_channel_ignoring_unimplemented_decoder_cost": best_channel,
+        "best_loader_chars_ignoring_unimplemented_decoder_cost": channels[best_channel],
     }
 
 
@@ -178,8 +189,17 @@ def profile_text(text: str, max_period: int = 8):
         row = profile_tokens(tokens, limit, max_period)
         row["max_rules"] = limit
         sweep.append(row)
-    best = min(sweep, key=lambda r: int(r["best_loader_chars"]))
-    return {"bf_bytes": len(raw), "semantic_tokens": len(tokens), "sweep": sweep, "best": best}
+    best = min(sweep, key=lambda r: int(r["best_loader_chars_ignoring_unimplemented_decoder_cost"]))
+    best_octal = min(sweep, key=lambda r: int(r["channels"]["balanced_octal_realized"]))
+    best_ext_octal = min(sweep, key=lambda r: int(r["channels"]["ext_lzss_balanced_octal_channel"]))
+    return {
+        "bf_bytes": len(raw),
+        "semantic_tokens": len(tokens),
+        "sweep": sweep,
+        "best": best,
+        "best_balanced_octal": best_octal,
+        "best_ext_lzss_balanced_octal": best_ext_octal,
+    }
 
 
 def main():
@@ -195,9 +215,21 @@ def main():
     if args.json:
         print(json.dumps(rows, indent=2, sort_keys=True))
     else:
+        total = sum(int(r["bf_bytes"]) for r in rows)
+        target = total // 10
+        octal = sum(int(r["best_balanced_octal"]["channels"]["balanced_octal_realized"]) for r in rows)
+        ext_octal = sum(int(r["best_ext_lzss_balanced_octal"]["channels"]["ext_lzss_balanced_octal_channel"]) for r in rows)
+        print(f"original={total:,} target10x={target:,}")
+        print(f"signed+periodic balanced-octal realized channel={octal:,} budget={target-octal:,}")
+        print(f"signed+periodic ext-LZSS+octal channel={ext_octal:,} unresolved=lzss_decoder")
         for row in rows:
-            b = row["best"]
-            print(f"{row['name']}: loader={b['best_loader_chars']:,} runs={b['affine_run_records']:,} patterns={b['pattern_run_records']:,} covered={b['run_covered_calls']:,} R={b['max_rules']}")
+            b = row["best_balanced_octal"]
+            print(
+                f"{row['name']}: octal={b['channels']['balanced_octal_realized']:,} "
+                f"payload={b['payload_bytes']:,} R={b['max_rules']} "
+                f"runs={b['affine_run_records']:,}+{b['pattern_run_records']:,} "
+                f"relations={b['plus_relations']:,}+{b['neg_relations']:,}"
+            )
 
 
 if __name__ == "__main__":
