@@ -21,7 +21,8 @@ rightmost flag and walks records right-to-left.  In one fixed BF loop body it:
 1. clears the current live flag;
 2. destructively adds ``delta`` to the current accumulator;
 3. emits the accumulator byte;
-4. transfers the accumulator three cells left into the next record;
+4. destructively transfers the accumulator three cells left into the next
+   record;
 5. lands on that record's live flag for the next loop test.
 
 The final transfer lands in dummy accumulator cell 0; after the loop that cell
@@ -64,7 +65,9 @@ def reference_program(data: bytes) -> str:
 
 # The executor body is independent of payload length and values.
 # It starts on a live-flag cell and exits on the dummy record's zero flag.
-EXECUTOR = "[-<[-<+>]<.[<<<+>>>]<]"
+# The inner transfer must consume the accumulator; otherwise any nonzero output
+# would make the transfer loop diverge.
+EXECUTOR = "[-<[-<+>]<.[-<<<+>>>]<]"
 CLEANUP = "<<[-]"
 
 
