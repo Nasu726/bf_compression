@@ -11,6 +11,8 @@ on:
       - 'experiments/verify_self_extracting_affine1.py'
       - 'experiments/self_extracting_balanced_nibble_channel.py'
       - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
+      - 'experiments/self_extracting_balanced_octal_channel.py'
+      - 'experiments/verify_self_extracting_balanced_octal_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
   workflow_dispatch:
 
@@ -44,3 +46,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_self_extracting_balanced_nibble_channel.py
+      - name: Verify balanced-octal payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_octal_channel.py
