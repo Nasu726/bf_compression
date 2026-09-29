@@ -6,6 +6,8 @@ on:
       - 'experiments/profile_realized_payload_channels.py'
       - 'experiments/profile_signed_periodic_call_runs.py'
       - 'experiments/verify_signed_periodic_call_runs.py'
+      - 'experiments/profile_native_isa_signed_periodic.py'
+      - 'experiments/verify_native_isa_signed_periodic.py'
       - 'experiments/profile_signed_relational_macro_grammar.py'
       - 'experiments/self_extracting_balanced_nibble_channel.py'
       - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
@@ -20,7 +22,7 @@ on:
 jobs:
   profile:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -154,9 +156,42 @@ jobs:
             results/tmp/compiler_direct_int_input.bf \
             --max-period 8
 
+      - name: Verify VM-native grammar serialization
+        run: |
+          python experiments/verify_native_isa_signed_periodic.py --max-rules 128 --max-period 8 \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+
+      - name: Profile VM-native grammar channel
+        run: |
+          python experiments/profile_native_isa_signed_periodic.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8 --json > results/tmp/compiler_native_isa_signed_periodic_v1.json
+          python experiments/profile_native_isa_signed_periodic.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8
+
       - uses: actions/upload-artifact@v4
         with:
           name: realized-payload-channels
           path: |
             results/tmp/compiler_realized_payload_channels_v1.json
             results/tmp/compiler_signed_periodic_realized_v2.json
+            results/tmp/compiler_native_isa_signed_periodic_v1.json
