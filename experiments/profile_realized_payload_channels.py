@@ -10,9 +10,11 @@ This profiler reuses the relational + periodic-call grammar and compares:
 
 * direct-byte: fully realized constructor; no channel decoder;
 * prefix16: dense constructor; BF bitstream decoder still unimplemented;
-* balanced-nibble: fully realized constructor + 58-char moving decoder;
-* tiny-LZSS variants of the above: constructor/channel costs are measured, but
-  an LZSS decoder is still an explicit outstanding cost.
+* balanced-nibble: fully realized constructor + moving decoder;
+* balanced-octal (8/8/4): fully realized constructor + moving decoder and the
+  optimum of the simple fixed-digit/fresh-cell model on uniform bytes;
+* tiny-LZSS variants: constructor/channel costs are measured, but an LZSS
+  decoder remains an explicit outstanding cost.
 
 The output deliberately labels unrealized decoder obligations instead of
 pretending their cost is zero.
@@ -31,7 +33,8 @@ from profile_relational_macro_grammar import build_grammar
 from profile_semantic_vm import semantic_tokens
 from profile_tiny_lzss import tiny_lzss_ext_decode, tiny_lzss_ext_encode
 from region_zero_opt import canonicalize, parse, precanonicalize, strip_bf
-from self_extracting_balanced_nibble_channel import total_channel_chars
+from self_extracting_balanced_nibble_channel import total_channel_chars as nibble_total_chars
+from self_extracting_balanced_octal_channel import total_channel_chars as octal_total_chars
 
 
 def channel_row(payload: bytes) -> dict[str, int]:
@@ -41,11 +44,13 @@ def channel_row(payload: bytes) -> dict[str, int]:
         "payload_bytes": len(payload),
         "direct_byte_chars": direct_byte_loader_chars(payload),
         "prefix16_constructor_chars": len(loader_source_for_bytes(payload)[0]),
-        "balanced_nibble_total_chars": total_channel_chars(payload),
+        "balanced_nibble_total_chars": nibble_total_chars(payload),
+        "balanced_octal_total_chars": octal_total_chars(payload),
         "ext_lzss_bytes": len(ext),
         "ext_direct_byte_chars": direct_byte_loader_chars(ext),
         "ext_prefix16_constructor_chars": len(loader_source_for_bytes(ext)[0]),
-        "ext_balanced_nibble_channel_chars": total_channel_chars(ext),
+        "ext_balanced_nibble_channel_chars": nibble_total_chars(ext),
+        "ext_balanced_octal_channel_chars": octal_total_chars(ext),
     }
 
 
@@ -72,10 +77,12 @@ def profile_text(text: str, max_period: int = 8) -> dict[str, object]:
         # Fully realized at the channel layer.  The grammar VM remains extra.
         "direct_byte": min(sweep, key=lambda r: int(r["direct_byte_chars"])),
         "balanced_nibble": min(sweep, key=lambda r: int(r["balanced_nibble_total_chars"])),
+        "balanced_octal": min(sweep, key=lambda r: int(r["balanced_octal_total_chars"])),
         # These retain explicit decoder obligations.
         "prefix16_constructor_only": min(sweep, key=lambda r: int(r["prefix16_constructor_chars"])),
         "ext_lzss_prefix16_constructor_only": min(sweep, key=lambda r: int(r["ext_prefix16_constructor_chars"])),
-        "ext_lzss_balanced_channel_only": min(sweep, key=lambda r: int(r["ext_balanced_nibble_channel_chars"])),
+        "ext_lzss_balanced_nibble_channel_only": min(sweep, key=lambda r: int(r["ext_balanced_nibble_channel_chars"])),
+        "ext_lzss_balanced_octal_channel_only": min(sweep, key=lambda r: int(r["ext_balanced_octal_channel_chars"])),
     }
     return {
         "bf_bytes": len(raw),
@@ -107,23 +114,28 @@ def main() -> None:
     total = sum(int(r["bf_bytes"]) for r in rows)
     target = total // 10
     direct = sum(int(r["best"]["direct_byte"]["direct_byte_chars"]) for r in rows)
-    balanced = sum(int(r["best"]["balanced_nibble"]["balanced_nibble_total_chars"]) for r in rows)
+    nibble = sum(int(r["best"]["balanced_nibble"]["balanced_nibble_total_chars"]) for r in rows)
+    octal = sum(int(r["best"]["balanced_octal"]["balanced_octal_total_chars"]) for r in rows)
     prefix = sum(int(r["best"]["prefix16_constructor_only"]["prefix16_constructor_chars"]) for r in rows)
     ext_prefix = sum(int(r["best"]["ext_lzss_prefix16_constructor_only"]["ext_prefix16_constructor_chars"]) for r in rows)
-    ext_balanced = sum(int(r["best"]["ext_lzss_balanced_channel_only"]["ext_balanced_nibble_channel_chars"]) for r in rows)
+    ext_nibble = sum(int(r["best"]["ext_lzss_balanced_nibble_channel_only"]["ext_balanced_nibble_channel_chars"]) for r in rows)
+    ext_octal = sum(int(r["best"]["ext_lzss_balanced_octal_channel_only"]["ext_balanced_octal_channel_chars"]) for r in rows)
     print(f"original={total:,} target10x={target:,}")
     print(f"direct_byte_realized_channel={direct:,} budget={target-direct:,}")
-    print(f"balanced_nibble_realized_channel={balanced:,} budget={target-balanced:,}")
+    print(f"balanced_nibble_realized_channel={nibble:,} budget={target-nibble:,}")
+    print(f"balanced_octal_realized_channel={octal:,} budget={target-octal:,}")
     print(f"prefix16_constructor_only={prefix:,} unresolved=prefix_decoder")
     print(f"ext_lzss_prefix16_constructor_only={ext_prefix:,} unresolved=prefix_decoder+lzss_decoder")
-    print(f"ext_lzss_balanced_channel={ext_balanced:,} unresolved=lzss_decoder")
+    print(f"ext_lzss_balanced_nibble_channel={ext_nibble:,} unresolved=lzss_decoder")
+    print(f"ext_lzss_balanced_octal_channel={ext_octal:,} unresolved=lzss_decoder")
     for row in rows:
         b = row["best"]
         print(
             f"{row['name']}: direct={b['direct_byte']['direct_byte_chars']:,}; "
-            f"balanced={b['balanced_nibble']['balanced_nibble_total_chars']:,}; "
+            f"nibble={b['balanced_nibble']['balanced_nibble_total_chars']:,}; "
+            f"octal={b['balanced_octal']['balanced_octal_total_chars']:,}; "
             f"prefix={b['prefix16_constructor_only']['prefix16_constructor_chars']:,}; "
-            f"ext+balanced={b['ext_lzss_balanced_channel_only']['ext_balanced_nibble_channel_chars']:,}"
+            f"ext+octal={b['ext_lzss_balanced_octal_channel_only']['ext_balanced_octal_channel_chars']:,}"
         )
 
 
