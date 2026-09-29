@@ -9,6 +9,8 @@ on:
       - 'experiments/verify_self_extracting_linear_vm.py'
       - 'experiments/self_extracting_affine1.py'
       - 'experiments/verify_self_extracting_affine1.py'
+      - 'experiments/self_extracting_balanced_nibble_channel.py'
+      - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
   workflow_dispatch:
 
@@ -38,3 +40,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_self_extracting_affine1.py
+      - name: Verify balanced-nibble payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_nibble_channel.py
