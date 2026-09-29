@@ -7,6 +7,8 @@ on:
       - 'experiments/verify_self_extracting_delta_output.py'
       - 'experiments/self_extracting_linear_vm.py'
       - 'experiments/verify_self_extracting_linear_vm.py'
+      - 'experiments/self_extracting_affine1.py'
+      - 'experiments/verify_self_extracting_affine1.py'
       - '.github/workflows/self-extracting-delta-output.yml'
   workflow_dispatch:
 
@@ -32,3 +34,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_self_extracting_linear_vm.py
+      - name: Verify data-driven affine semantic kernel
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_affine1.py
