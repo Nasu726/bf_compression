@@ -63,6 +63,27 @@ def nibble_fragment(nibble: int) -> str:
 #   <<                        previous live
 DECODER = "[-<<++++++++>++++++++<[->>++++++++++++++++<<]>[->+<]<<]"
 CLEANUP = "<<"  # dummy live -> dummy first cell
+FIXED_DECODER_CHARS = 1 + len(DECODER) + len(CLEANUP)  # initial '<' + body + cleanup
+
+
+def payload_constructor_chars(blob: bytes) -> int:
+    """Exact BF source length without constructing the source string."""
+    if not blob:
+        return 0
+    total = 3  # skip dummy record
+    for value in blob:
+        high = (value >> 4) - 8
+        low = (value & 15) - 8
+        # Each signed nibble has abs(value) +/- commands and one '>'.  The
+        # record then needs '+>' for its live marker.
+        total += abs(high) + 1 + abs(low) + 1 + 2
+    return total
+
+
+def total_channel_chars(blob: bytes) -> int:
+    if not blob:
+        return 0
+    return payload_constructor_chars(blob) + FIXED_DECODER_CHARS
 
 
 def payload_source(blob: bytes) -> str:
@@ -74,7 +95,9 @@ def payload_source(blob: bytes) -> str:
         pieces.append(nibble_fragment(value & 15))
         # Now at fresh live cell.  Mark it and advance to next record's high.
         pieces.append("+>")
-    return "".join(pieces)
+    source = "".join(pieces)
+    assert len(source) == payload_constructor_chars(blob)
+    return source
 
 
 def build_program(blob: bytes) -> str:
@@ -82,7 +105,9 @@ def build_program(blob: bytes) -> str:
         return ""
     payload = payload_source(blob)
     # Constructor ends at the cell immediately right of the rightmost live.
-    return payload + "<" + DECODER + CLEANUP
+    program = payload + "<" + DECODER + CLEANUP
+    assert len(program) == total_channel_chars(blob)
+    return program
 
 
 def decoded_cell_index(byte_index: int) -> int:
@@ -91,12 +116,12 @@ def decoded_cell_index(byte_index: int) -> int:
 
 
 def source_accounting(blob: bytes) -> dict[str, int | float]:
-    payload = payload_source(blob)
-    full = build_program(blob)
+    payload_chars = payload_constructor_chars(blob)
+    full_chars = total_channel_chars(blob)
     return {
         "bytes": len(blob),
-        "payload_constructor_chars": len(payload),
-        "fixed_decoder_chars": (1 + len(DECODER) + len(CLEANUP)) if blob else 0,
-        "total_chars": len(full),
-        "chars_per_byte": (len(full) / len(blob)) if blob else 0.0,
+        "payload_constructor_chars": payload_chars,
+        "fixed_decoder_chars": FIXED_DECODER_CHARS if blob else 0,
+        "total_chars": full_chars,
+        "chars_per_byte": (full_chars / len(blob)) if blob else 0.0,
     }
