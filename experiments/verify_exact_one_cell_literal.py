@@ -42,7 +42,7 @@ def observe_source(program: str) -> tuple[tuple[int, ...], int]:
 def verify_bruteforce() -> int:
     # Enumerate *all* token strings of up to 7 tokens of the four permitted
     # instructions. For each observed behavior, shortest_literal must be no
-    # longer than every such candidate; ties are permitted.
+    # longer than any such candidate; an optimum may use >7 tokens.
     symbols = ("+", "-", ".", "[-]")
     seen: dict[tuple[tuple[int, ...], int], int] = {}
     candidates = 0
@@ -55,7 +55,7 @@ def verify_bruteforce() -> int:
     for (output, final), smallest in seen.items():
         opt = exact_shortest_literal_for_observations(output, final)
         assert observe_source(opt) == (output, final)
-        assert len(opt) == smallest, (output, final, len(opt), smallest)
+        # Enumeration bounds the *number of tokens*, not source characters.\n        # A shortest representation can contain more cheap single-character\n        # tokens than a longer candidate that contains several '[-]' tokens.\n        assert len(opt) <= smallest, (output, final, len(opt), smallest)
     return candidates
 
 
