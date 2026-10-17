@@ -186,3 +186,93 @@ implementation and full-state differential verification.
    candidate, including any decoder/epilogue. Pick the shortest valid one.
 5. Move only source-size improvements supported by full-state differential
    tests and, where possible, local formal proof obligations to production.
+
+
+## 8. A shortest one-cell periodic-output grammar
+
+Implementation: `experiments/exact_one_cell_loop_grammar.py`.
+Verifier: `experiments/verify_exact_one_cell_loop_grammar.py`.
+
+The one-cell literal grammar in Section 3 is extended with exactly the
+terminating instruction `[.delta]` (an arithmetic increment/decrement
+followed by no other operations). The current nonzero cell is printed,
+then updated by the fixed signed increment `delta`; the loop stops
+when the updated cell reaches zero. A loop with `delta=0` is excluded.
+
+For a fixed output trace, after every literal output the current cell
+equals the last emitted byte, whereas after a completed `[.delta]` loop
+the cell is zero. Thus only these two state classes are needed per output
+position. The shortest source over this **extended normal-form grammar**
+is a shortest path over an acyclic directed graph indexed by output
+position and those two possible current bytes.
+
+A `[.delta]` loop of length >=2 determines its unique increment from
+the first two observed bytes. A loop of length 1 must use
+`delta=-first_byte mod 256`. Every candidate is simulated for one full
+cycle to ensure it terminates exactly where the observed trace does.
+The dynamic program therefore considers all loops in this grammar and
+finds the shortest complete candidate, with final-cell restoration
+charged.
+
+CI passed 1,138 full-memory differential cases. Measured on that suite:
+
+* Original literal/reference: **100,700 BF chars**.
+* Section 3's exact straight literal: **29,945 BF chars**.
+* Loop-augmented grammar: **27,364 BF chars**.
+
+For example, the observed output bytes `5,4,3,2,1` and final zero
+cell have straight-literal optimum 15, but loop-grammar optimum 9:
+
+```bf
++++++[.-]
+```
+
+The dynamic program is globally optimal only within its explicitly
+defined grammar, not across arbitrary BF loops or multiple scratch cells.
+
+## 9. Resynthesizing a flat odd-control affine loop
+
+Implementation: `experiments/affine_loop_resynthesis.py`.
+Verifier: `experiments/verify_affine_loop_resynthesis.py`.
+
+For flat balanced loops without I/O, whose control-cell net increment
+`c` is odd modulo 256, every 8-bit control entry terminates. With
+initial control `x`, each noncontrol target increment `a_j` induces
+
+`y_j' = y_j - x * a_j * inverse(c) (mod 256)`.
+
+Any other odd control increment `c'` together with
+`a'_j=a_j*inverse(c)*c' mod 256` realizes **the same affine state
+transformation for every possible entry tape**.
+
+We enumerate all 128 odd `c'`, use shortest signed byte spellings
+for all updates, and take the shortest path visiting the original
+relative pointer extrema `L,R` and returning to control, costing
+`2(R-L)` moves. This finds a shortest loop in the normalized family
+with a single update for each nonzero target and the original excursion
+extrema. Only strict source-length improvements are accepted.
+
+All even-control loops, unbalanced-pointer loops, loops with nested
+loops and loops with I/O are left unchanged. The 8-bit wrapping and
+left-boundary preconditions are essential. The full seven-artifact
+opportunity result is measured separately; do not extrapolate from
+synthetic loop savings.
+
+## 10. Verified external-optimizer ABI mismatch
+
+While checking the exact multicell straight theorem, the existing
+translator's `optimize_bf` sometimes removed trailing pointer routing
+because its internal optimization contract does not appear to observe
+the final pointer. Under this project's stronger final-state contract
+this is **not** a valid replacement.
+
+On 88 deliberately chosen straight-line cases, this legacy optimizer's
+result differed in final pointer in **56 cases**, although output,
+input consumption, and memory still matched. The new exact optimizer
+preserved the pointer in all 88 cases.
+
+Consequently any future production composition must either tighten
+the legacy optimizer's ABI, add and verify a pointer-repair suffix,
+or reject outputs that do not satisfy full-state equivalence. It is
+incorrect to compare full-state-exact candidates against a weaker
+optimizer and assume equivalent behavior without a repair.
