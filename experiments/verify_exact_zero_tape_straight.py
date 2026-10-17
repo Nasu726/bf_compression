@@ -47,7 +47,17 @@ def verify_case(original: str) -> tuple[int, int]:
         max((a for a, _ in state.nonzero), default=0),
         16,
     )
-    memsize = max(64, max_addr + 64)
+    # The reference may visit far cells and return without modifying them.
+    # Tape allocation must cover the full execution trace, not only
+    # the nonzero final state and final pointer.
+    pos = peak = 0
+    for ch in original:
+        if ch == ">":
+            pos += 1
+            peak = max(peak, pos)
+        elif ch == "<":
+            pos -= 1
+    memsize = max(64, max_addr + 64, peak + 64)
     baseline = run_bf(original, memory_size=memsize, step_limit=5_000_000)
     for source in (candidate, optimized):
         result = run_bf(source, memory_size=memsize, step_limit=5_000_000)
