@@ -35,7 +35,7 @@ EXECUTOR = (
     "["
     "-"                            # live := 0
     "<[-<<<<<<[-]>>>>>>]"          # clear flag (6) -> state (0)
-    "<[-<<<<<.>>>> >]".replace(" ", "")  # out flag (5) -> state (0)
+    "<[-<<<<<.>>>>>]"              # out flag (5) -> state (0)
     "<" + ADD_DISPATCH            # add flag (4), consumes encoded digits
     + "<<<<[-<<<<<<<<+>>>>>>>>]<" # transfer state to previous record
     + "]"
