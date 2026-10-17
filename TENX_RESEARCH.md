@@ -335,3 +335,70 @@ advance by a fixed delta), encode the whole run as one call-pattern definition,
 a count, an initial vector, and a step vector.  This composes run-length grammar
 ideas with relational parameter binding and is the natural generalization of
 the already validated runtime-lane transformations.
+
+
+## 2026-10-18 — Fused balanced-digit semantic executors (actual BF source)
+
+The prior grammar numbers are only *payload constructor* estimates; a full
+standard-BF decoder and semantic interpreter must still be paid for.
+
+To isolate this obligation, we built two **self-contained runnable standard-BF
+program generators** for the intentionally limited one-logical-cell ISA:
+
+- `A(delta)`: add an 8-bit value modulo 256;
+- `O`: output the cell;
+- `C`: clear the cell.
+
+These run from a zero tape and preserve the complete final memory, final
+pointer, input consumption, and output. They do not yet implement MOVE,
+INPUT, conditional loops, or the complete grammar interpreter.
+
+Both VMs construct reversed one-hot opcode records and then execute a
+single right-to-left moving-loop body. Every temporary record is consumed to
+zero; the final logical cell is materialized at physical cell 0, pointer 0.
+
+**Fused nibble** (`self_extracting_fused_nibble_vm.py`):
+- record: `[state, high-8, low-8, add, out, clear, live]`;
+- ADD decodes `16*high + low` directly into state rather than first
+  materializing the argument as a standalone byte;
+- fixed executor + entry/exit overhead **117 BF chars**.
+
+**Fused octal** (`self_extracting_fused_octal_vm.py`):
+- record: `[state, top2-2, mid3-4, low3-4, add, out, clear, live]`;
+- ADD uses Horner evaluation `((top*8)+mid)*8+low`;
+- fixed executor + entry/exit overhead **130 BF chars**;
+- more cells but cheaper mean encoded value cost than radix-16/16.
+
+GitHub Actions `self-extracting-delta-output` completed successfully on
+commit `61ca6d0a4e987c8e0039669725375bf19ed27308`.  **346**
+full-memory differential test cases passed, including all 256 values of
+single ADD byte operands, randomized opcode sequences, and optimization
+of the BF source by the translator's current optimizer.
+
+Across these 346 deliberately mixed/edge-case tests, *actual runnable BF
+source* aggregates are:
+
+| Candidate | BF source chars |
+| --- | ---: |
+| Literal reference | 100,651 |
+| Fused balanced-nibble | 83,949 |
+| Fused balanced-octal | 87,111 |
+| Shortest-of literal / existing direct-byte VM / nibble / octal | **56,302** |
+
+For 256 random ADDs (one representative reproducible seed):
+literal=**16,001**, nibble=**4,511**, octal=**4,006**. On 64 ADDs:
+3,986 / 1,200 / 1,111. On 16 ADDs: 867 / 413 / 370.
+
+The octal variant beats nibble on ADD-heavy sequences, while the larger
+8-cell octal record is sometimes more expensive on mixed O/C-heavy
+sequences. Therefore global/region choice needs a **cost-based portfolio**,
+not an unconditional encoding switch. Also note that these are *single-cell,
+zero-initial-tape* experiments: results do not transfer automatically to
+general BF input/output, arbitrary final tape state, or the 7 real compiler
+artifacts.
+
+Next high-priority step: integrate **grammar/RUN/periodic pattern payloads**
+with a real BF runtime decoder and an interpreter supporting pointer motion
+and control flow. The reported ~82k grammar payload number must never be
+described as a complete 10x BF output until fixed decoder, VM, data layout,
+and final state cleanup/materialization are charged and validated.
