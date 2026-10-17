@@ -37,7 +37,7 @@ a stronger access-trace precondition, not merely matching extrema.
 
 from dataclasses import dataclass
 
-COMMANDS = set("><+-[]")
+COMMANDS = set("><+-.,[]")
 
 
 def shortest_signed(delta: int) -> str:
