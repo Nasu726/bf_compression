@@ -104,11 +104,13 @@ def cheapest_verified_family(ops: Iterable[Op]) -> tuple[str, str]:
     from self_extracting_linear_vm import build_program as legacy_vm
     from self_extracting_fused_octal_vm import build_program as octal_vm
     from exact_one_cell_literal import exact_shortest_literal
+    from exact_one_cell_loop_grammar import exact_shortest_loop_grammar
 
     seq = list(ops)
     options = {
         "literal": reference_program(seq),
         "exact_one_cell_literal": exact_shortest_literal(seq),
+        "one_cell_loop_grammar": exact_shortest_loop_grammar(seq),
         "direct_byte_vm": legacy_vm(seq),
         "fused_nibble_vm": build_program(seq),
         "fused_octal_vm": octal_vm(seq),
