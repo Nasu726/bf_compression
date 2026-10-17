@@ -38,7 +38,7 @@ def verify_exhaustive() -> tuple[int, int]:
     return valid, len(best_seen)
 
 
-def verify_case(original: str) -> tuple[int, int]:
+def verify_case(original: str) -> tuple[int, int, int]:
     candidate = exact_shortest_straight(original)
     optimized = optimize_bf(candidate)
     state = summarize(original)
@@ -59,10 +59,18 @@ def verify_case(original: str) -> tuple[int, int]:
             pos -= 1
     memsize = max(64, max_addr + 64, peak + 64)
     baseline = run_bf(original, memory_size=memsize, step_limit=5_000_000)
-    for source in (candidate, optimized):
-        result = run_bf(source, memory_size=memsize, step_limit=5_000_000)
-        assert full_state(result) == full_state(baseline), (original, source)
-    return len(original), len(candidate)
+    result = run_bf(candidate, memory_size=memsize, step_limit=5_000_000)
+    assert full_state(result) == full_state(baseline), (original, candidate)
+
+    # Legacy optimize_bf may drop terminal routing because its contract does
+    # not preserve the final data pointer.  Do NOT conflate that optimizer's
+    # weaker observation model with the full-state criterion here.
+    legacy = run_bf(optimized, memory_size=memsize, step_limit=5_000_000)
+    assert (legacy.output, legacy.input_consumed, legacy.memory) == (
+        baseline.output, baseline.input_consumed, baseline.memory
+    ), (original, optimized)
+    pointer_drift = int(legacy.pointer != baseline.pointer)
+    return len(original), len(candidate), pointer_drift
 
 
 def main() -> None:
@@ -92,7 +100,7 @@ def main() -> None:
     rows = [verify_case(sample) for sample in samples]
     print(f"straight BF brute-force: {valid:,} valid short programs; {distinct:,} distinct final states")
     print(f"straight BF differential cases passed: {len(rows)}")
-    print(f"aggregate reference={sum(a for a, _ in rows):,} exact={sum(b for _, b in rows):,}")
+    print(f"aggregate reference={sum(a for a, _, _ in rows):,} exact={sum(b for _, b, _ in rows):,}")\n    print(f"legacy optimizer final-pointer drift cases: {sum(c for _, _, c in rows):,}/{len(rows):,}")
     print(f"far travel test: original={len(samples[2]):,} exact={len(exact_shortest_straight(samples[2])):,}")
 
 
