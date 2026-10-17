@@ -402,3 +402,83 @@ with a real BF runtime decoder and an interpreter supporting pointer motion
 and control flow. The reported ~82k grammar payload number must never be
 described as a complete 10x BF output until fixed decoder, VM, data layout,
 and final state cleanup/materialization are charged and validated.
+
+
+## 2026-10-18 — Exact bounded-language synthesis, with a corpus-level negative result
+
+We deliberately re-evaluated the earlier fused-VM gains against
+**semantically normalized, provably shortest restricted-language baselines**,
+not just the raw unoptimized A/O/C instruction stream.
+
+Two independent exact synthesis families are now implemented:
+
+1. `exact_one_cell_literal.py` derives the shortest BF over
+   `{+,-,.,[-]}` given a fixed output-byte sequence and final cell value;
+   exhaustive cost checks covered all 65,536 byte-state transitions,
+   21,845 short source candidates, and 363 full-memory differential tests.
+   The 363-case aggregate was **220,561 -> 49,091** BF source chars.
+2. `exact_zero_tape_straight.py` derives the shortest BF over
+   `{+,-,<,>}` on a zero-initial tape given the complete final
+   memory and final pointer:
+   `sum_i min(v_i,256-v_i) + 2*max(R,p)-p`, where `R` is the
+   highest nonzero cell and `p` the final pointer.  Verified via
+   8,788 valid short source programs (1,268 distinct states) and
+   88 full-memory differential cases: **18,968 -> 4,256** chars.
+
+A *third* DP family `exact_one_cell_loop_grammar.py` extends the
+first one with terminating arithmetic output loops `[.delta]`.
+The DP finds the globally shortest source **inside this explicit
+loop-augmented normal-form grammar**, not among all Brainfuck
+programs.  Its 1,138-case differential suite reduced
+**100,700 -> 27,364** chars, versus **29,945** for the
+straight literal grammar.  The output sequence 5,4,3,2,1 ending
+with zero is realized by `+++++[.-]` (9 chars vs 15 literal).
+
+The resulting **runnable-source portfolio** for the earlier 346-case
+fused VM benchmark is now **36,867 chars** instead of 56,302
+when exact one-cell normalization and the output-loop grammar are
+included. This is a correction to the benchmark methodology:
+a 256-ADD source can collapse to at most 128 literal +/- symbols,
+so the older 4x random-ADD VM ratio was *not* a sound measure of
+distance to the shortest equivalent BF.
+
+A fourth exact-map transformation
+`affine_loop_resynthesis.py` reparameterizes flat pointer-balanced
+8-bit loops whose control delta is odd.  It enumerates all 128
+possible odd control increments, adjusts target coefficients to
+preserve the exact affine state transformation, and chooses the
+shortest normalized loop while retaining pointer extrema.
+64 test families passed both symbolic state-map checks and real
+BF full-memory differential tests.  Synthetic example:
+
+```
+[- followed by 85 '+' in target cell]  90 BF chars
+[+++>+<]                                8 BF chars
+```
+
+However, the **actual seven compiler-generated BF artifact suite**
+has **zero profitable occurrences** of this transformation:
+
+```
+  2,066,322 -> 2,066,322 BF chars; 0 changed loops
+```
+
+This is confirmed by the successful `macro-opportunity` CI profiler
+`experiments/profile_affine_resynthesis.py`. The dramatic synthetic
+11.25x local example is a *negative opportunity result* for the present
+compiler corpus and must not be presented as a generic 10x path.
+
+**Research consequence:** abandon broad flat odd-control coefficient
+resynthesis as the main compression strategy for the current outputs.
+Continue to prioritize grammar/parameter/periodic structural encoding,
+a small **real executable** BF decoder/VM, and complete final-state
+materialization. All 10x comparisons must include the latter costs;
+the ~82k grammar figure remains payload-only.
+
+A related ABI bug was exposed by the exact zero-tape verifier:
+the existing translator `optimize_bf` changed the **final data pointer**
+on 56 of the 88 chosen straight cases (output and tape bytes still
+matched). Future composition must explicitly repair or reject such
+outputs under this project's stronger equivalence contract.
+
+Proof details and restrictions are maintained in `THEORY_LIMITS.md`.
