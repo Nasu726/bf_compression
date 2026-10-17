@@ -216,6 +216,29 @@ jobs:
                   print(f'  distance={d}: runs={runs[d]}, movement_bytes={byte_mass}')
           PY
 
+      - name: Measure exact-map affine loop compression
+        run: |
+          python experiments/profile_affine_resynthesis.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_affine_resynthesis_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_affine_resynthesis_v1.json').read_text())
+          old=sum(r['baseline_bytes'] for r in rows)
+          new=sum(r['rewritten_bytes'] for r in rows)
+          changed=sum(r['changed_loops'] for r in rows)
+          print(f'affine_resynthesis total={old:,}->{new:,} saved={old-new:,} ({(old-new)/old:.4%}); changed_loops={changed:,}')
+          for row in rows:
+              print(f"{row['name']}: {row['baseline_bytes']:,}->{row['rewritten_bytes']:,}; changed={row['changed_loops']:,}; saved={row['saved_bytes']:,}")
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: macro-opportunity
@@ -223,3 +246,4 @@ jobs:
             results/tmp/compiler_macro_structure.json
             results/tmp/compiler_layout_headroom.json
             results/tmp/compiler_move_distances.json
+            results/tmp/compiler_affine_resynthesis_v1.json
