@@ -102,12 +102,14 @@ def source_accounting(ops: Iterable[Op]) -> dict[str, int]:
 def cheapest_verified_family(ops: Iterable[Op]) -> tuple[str, str]:
     """Portfolio of directly executable, independently verified BF families."""
     from self_extracting_linear_vm import build_program as legacy_vm
+    from self_extracting_fused_octal_vm import build_program as octal_vm
 
     seq = list(ops)
     options = {
         "literal": reference_program(seq),
         "direct_byte_vm": legacy_vm(seq),
         "fused_nibble_vm": build_program(seq),
+        "fused_octal_vm": octal_vm(seq),
     }
     family = min(options, key=lambda name: len(options[name]))
     return family, options[family]
