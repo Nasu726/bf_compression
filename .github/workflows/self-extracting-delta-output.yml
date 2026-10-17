@@ -13,6 +13,7 @@ on:
       - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
       - 'experiments/self_extracting_fused_nibble_vm.py'
       - 'experiments/verify_self_extracting_fused_nibble_vm.py'
+      - 'experiments/self_extracting_fused_octal_vm.py'
       - 'experiments/self_extracting_balanced_octal_channel.py'
       - 'experiments/verify_self_extracting_balanced_octal_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
