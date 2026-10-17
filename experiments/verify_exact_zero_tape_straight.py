@@ -100,7 +100,8 @@ def main() -> None:
     rows = [verify_case(sample) for sample in samples]
     print(f"straight BF brute-force: {valid:,} valid short programs; {distinct:,} distinct final states")
     print(f"straight BF differential cases passed: {len(rows)}")
-    print(f"aggregate reference={sum(a for a, _, _ in rows):,} exact={sum(b for _, b, _ in rows):,}")\n    print(f"legacy optimizer final-pointer drift cases: {sum(c for _, _, c in rows):,}/{len(rows):,}")
+    print(f"aggregate reference={sum(a for a, _, _ in rows):,} exact={sum(b for _, b, _ in rows):,}")
+    print(f"legacy optimizer final-pointer drift cases: {sum(c for _, _, c in rows):,}/{len(rows):,}")
     print(f"far travel test: original={len(samples[2]):,} exact={len(exact_shortest_straight(samples[2])):,}")
 
 
