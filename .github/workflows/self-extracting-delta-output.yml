@@ -20,6 +20,8 @@ on:
       - 'experiments/verify_exact_zero_tape_straight.py'
       - 'experiments/exact_one_cell_loop_grammar.py'
       - 'experiments/verify_exact_one_cell_loop_grammar.py'
+      - 'experiments/affine_loop_resynthesis.py'
+      - 'experiments/verify_affine_loop_resynthesis.py'
       - 'experiments/self_extracting_balanced_octal_channel.py'
       - 'experiments/verify_self_extracting_balanced_octal_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
@@ -75,3 +77,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_exact_one_cell_loop_grammar.py
+      - name: Verify exact-map affine-loop resynthesis
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_affine_loop_resynthesis.py
