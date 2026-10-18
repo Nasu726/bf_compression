@@ -58,7 +58,7 @@ def main():
         ("++[>]" + ">[-]"*12 + "<"*12, ".,."*75, ("++.", "[-]."), "", "Hello!", True),
         ("++[>]" + ">[-]"*12 + "<"*12, "[->+<]."*45, ("++.", "[->+<]."), "", "", True),
         # Exhaust the small scratch search region using unknown input data.
-        ("," + ">,"*15 + "<"*15, block, (".",), "", "abcdefg", False),
+        ("," + ">,"*99 + "<"*99, block, (".",), "", "abcdefg", False),
         # A moving loop inside the reusable macro is not pointer-balanced.
         (moving, "[>]" + "+."*100, ("++.",), "", "X", False),
         # A gap that moves and does not return to the anchor is rejected.
