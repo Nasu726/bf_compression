@@ -38,7 +38,7 @@ def main():
         (">+<[-]>.<", 60, ""),
         (">>+<<>.<", 60, ""),
         ("+.-.", 70, ""),
-        ("<>", 180, ""),
+        ("><", 180, ""),
         ("[->+<]>[-]<", 50, ""),
     ]
     cases = [("++++++" + block * repeat, data) for block, repeat, data in templates]
@@ -56,7 +56,7 @@ def main():
 
     good = cases[:-3]
     rng = Random(0x5CA7C)
-    body_options = ["+>+<", "-.>", "[-]", ".<>", "><", ">+<", "<>", ",.", "[->+<]"]
+    body_options = ["+>+<", "-.>", "[-]", "><", ">+<", "<>", ",.", "[->+<]"]
     # Exclude an intentionally unbalanced pointer option from construction.
     body_options.remove("-.>")
     for _ in range(75):
