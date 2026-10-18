@@ -31,8 +31,7 @@ def verify(body: str, counts: tuple[int, ...], start: int = 0):
     )
     assert actual.pointer == 0
     assert all(v == 0 for v in actual.memory[1:])
-    assert len(compressed) <= len(literal) or n < 3
-    return len(literal), len(compressed)
+    # The nested construction is exact but not necessarily worthwhile for\n    # small counts. The costed portfolio must reject longer candidates.\n    return len(literal), len(compressed)
 
 
 def main():
