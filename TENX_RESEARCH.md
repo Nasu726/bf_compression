@@ -699,3 +699,75 @@ which moved left from tape cell zero, not to a compressor semantic
 mismatch. After replacing that fixture with valid pointer-balanced
 BF, the entire 22-case original nested verifier passed offline
 alongside 96 additional independent full-memory shadow tests.
+
+
+## 2026-10-18 — A genuine runnable threaded macro dictionary over W tape cells
+
+Added \`experiments/threaded_window_macro_vm.py\` and
+\`experiments/verify_threaded_window_macro_vm.py\`. This crosses a
+different boundary from grammar payload profiling: the complete
+macro dictionary and arbitrary nonadjacent call schedule are compiled
+into ONE self-contained standard-BF program. The cost includes data
+initialization, opcode dispatch, the single literal copy of every
+dictionary macro, transfer of every logical tape cell, and full
+scratch cleanup.
+
+For K statically defined balanced macros and W logical data cells, a
+reversed call record is \`[W data | K one-hot symbol flags | live]\`,
+of width R=W+K+1. The executor consumes the live flag, executes the
+selected dictionary macro at the record's data anchor, and carries all
+W data cells to the preceding record. Dictionary macros can use all
+eight BF commands, including comma/input, output, and statically
+balanced nested loops, but cannot leave the W-cell window or contain
+a moving-pointer loop. They do not read or write dispatch metadata.
+This restores the final W real data bytes in cells [0,W), all other
+cells zero, and pointer zero. Input/EOF semantics are inherited from
+the pinned BF interpreter; no dead-store assumption on comma is used.
+
+**Exact source accounting** for N calls:
+  * record constructor: R + N*(R+2) BF characters;
+  * full compiled output: constructor + 1 + dispatcher length + (R-1);
+  * each macro definition appears once, inside the shared dispatcher.
+The source-size portfolio emits the literal expansion instead when
+the complete VM encoding would be longer.
+
+Offline differential tests under the pinned interpreter's zero-EOF
+convention passed **1,131 cases**, comparing output, input consumption,
+final pointer and every allocated tape cell. This includes exhaustive
+call streams of length 0..5 for three macro dictionaries at 1, 2 and 3
+cells, randomized larger call sequences, multi-cell state transfer,
+input and nested loops.
+
+Representative source-length comparisons (literal vs *fully runnable*
+standard BF, including payload, dictionary VM and cleanup):
+
+| Window | Dictionary macros | Calls | Literal | Threaded VM |
+| ---: | ---: | ---: | ---: | ---: |
+| 2 | 3 | 1 | 300 | 893 |
+| 2 | 3 | 3 | 860 | 909 |
+| 2 | 3 | 16 | 4,120 | 1,013 |
+| 2 | 3 | 64 | 16,825 | 1,397 |
+| 2 | 3 | 128 | 34,850 | 1,909 |
+
+The last row gives **18.26x source reduction** on an intentionally
+dictionary-friendly synthetic instance. For a tiny dictionary of
+short instructions, the VM is longer: literal fallback is necessary.
+These measurements are **not** the pinned seven compiler artifacts,
+nor an implementation of the full signed-relational/periodic grammar.
+
+A separate local footprint scan of the available **1,942,406-char
+fixed-point seven-artifact BF corpus** counts only **51,427 source
+characters** in flat, pointer-balanced leaf loops whose peak pointer
+distance is at most three cells (width <=4). Even a zero-cost
+replacement for *all those leaf loops alone* would save at most
+2.65% of this corpus. This is a bound only for modifying those
+specific leaf-loop substrings, NOT for sharing larger macro blocks
+or re-encoding movement globally. It reinforces the need for
+cross-region reuse, parameterized grammar rules, and efficient
+pointer/tape representation.
+
+Next stages: automatically extract balanced tape-window macros from
+compiler source; replace one-hot call records with a denser encoded
+symbol stream; connect relational/periodic rules; extend beyond
+bounded W and restore arbitrary final pointer. Do not label this as
+the end-to-end 10x result.
