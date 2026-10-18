@@ -1,0 +1,141 @@
+name: self-extracting-delta-output
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/self_extracting_delta_output.py'
+      - 'experiments/verify_self_extracting_delta_output.py'
+      - 'experiments/self_extracting_linear_vm.py'
+      - 'experiments/verify_self_extracting_linear_vm.py'
+      - 'experiments/self_extracting_affine1.py'
+      - 'experiments/verify_self_extracting_affine1.py'
+      - 'experiments/self_extracting_balanced_nibble_channel.py'
+      - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
+      - 'experiments/self_extracting_fused_nibble_vm.py'
+      - 'experiments/verify_self_extracting_fused_nibble_vm.py'
+      - 'experiments/self_extracting_fused_octal_vm.py'
+      - 'experiments/exact_one_cell_literal.py'
+      - 'experiments/verify_exact_one_cell_literal.py'
+      - 'experiments/exact_zero_tape_straight.py'
+      - 'experiments/verify_exact_zero_tape_straight.py'
+      - 'experiments/exact_one_cell_loop_grammar.py'
+      - 'experiments/verify_exact_one_cell_loop_grammar.py'
+      - 'experiments/affine_loop_resynthesis.py'
+      - 'experiments/verify_affine_loop_resynthesis.py'
+      - 'experiments/one_cell_counted_macro.py'
+      - 'experiments/verify_one_cell_counted_macro.py'
+      - 'experiments/nested_executable_grammar.py'
+      - 'experiments/verify_nested_executable_grammar.py'
+      - 'experiments/global_scratch_reroll.py'
+      - 'experiments/verify_global_scratch_reroll.py'
+      - 'experiments/nonadjacent_phase_macro.py'
+      - 'experiments/verify_nonadjacent_phase_macro.py'
+      - 'experiments/mine_nonadjacent_macro.py'
+      - 'experiments/verify_mine_nonadjacent_macro.py'
+      - 'experiments/nonadjacent_epoch_macro.py'
+      - 'experiments/verify_nonadjacent_epoch_macro.py'
+      - 'experiments/mine_epoch_nonadjacent_macro.py'
+      - 'experiments/verify_mine_epoch_nonadjacent_macro.py'
+      - 'experiments/mine_nested_scope_macro.py'
+      - 'experiments/verify_mine_nested_scope_macro.py'
+      - 'experiments/threaded_window_macro_vm.py'
+      - 'experiments/verify_threaded_window_macro_vm.py'
+      - 'experiments/self_extracting_balanced_octal_channel.py'
+      - 'experiments/verify_self_extracting_balanced_octal_channel.py'
+      - '.github/workflows/self-extracting-delta-output.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify self-cleaning fused delta-output executor
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_delta_output.py
+      - name: Verify self-cleaning straight-line semantic VM
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_linear_vm.py
+      - name: Verify data-driven affine semantic kernel
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_affine1.py
+      - name: Verify balanced-nibble payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_nibble_channel.py
+      - name: Verify balanced-octal payload decoder
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_balanced_octal_channel.py
+      - name: Verify fused balanced-nibble semantic VM
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_self_extracting_fused_nibble_vm.py
+      - name: Prove optimality for one-cell literal fragment
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_exact_one_cell_literal.py
+      - name: Prove optimality for zero-tape straight multi-cell fragment
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_exact_zero_tape_straight.py
+      - name: Verify globally costed output progression loops
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_exact_one_cell_loop_grammar.py
+      - name: Verify exact-map affine-loop resynthesis
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_affine_loop_resynthesis.py
+      - name: Verify self-contained executable grammar RUNs
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_one_cell_counted_macro.py
+      - name: Verify recursively nested executable grammar
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_nested_executable_grammar.py
+      - name: Verify globally proven unused-scratch BF reroll
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_global_scratch_reroll.py
+      - name: Verify runnable non-adjacent phase-dispatched macros
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_nonadjacent_phase_macro.py
+      - name: Verify automatic bounded nonadjacent grammar mining
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_mine_nonadjacent_macro.py
+      - name: Verify epoch-local zero-scratch nonadjacent sharing
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_nonadjacent_epoch_macro.py
+      - name: Verify automatic epoch-aware nonadjacent BF grammar
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_mine_epoch_nonadjacent_macro.py
+      - name: Verify recursive scope-local nonadjacent macro sharing
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_mine_nested_scope_macro.py
+      - name: Verify full-state threaded macro dictionary on bounded tape windows
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_threaded_window_macro_vm.py

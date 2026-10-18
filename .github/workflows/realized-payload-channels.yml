@@ -1,0 +1,197 @@
+name: realized-payload-channels
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/profile_realized_payload_channels.py'
+      - 'experiments/profile_signed_periodic_call_runs.py'
+      - 'experiments/verify_signed_periodic_call_runs.py'
+      - 'experiments/profile_native_isa_signed_periodic.py'
+      - 'experiments/verify_native_isa_signed_periodic.py'
+      - 'experiments/profile_signed_relational_macro_grammar.py'
+      - 'experiments/self_extracting_balanced_nibble_channel.py'
+      - 'experiments/verify_self_extracting_balanced_nibble_channel.py'
+      - 'experiments/self_extracting_balanced_octal_channel.py'
+      - 'experiments/verify_self_extracting_balanced_octal_channel.py'
+      - 'experiments/profile_periodic_call_runs.py'
+      - 'experiments/profile_relational_macro_grammar.py'
+      - 'experiments/profile_tiny_lzss.py'
+      - '.github/workflows/realized-payload-channels.yml'
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 0851b624364013041faa001db55cf9b90447cdef
+          path: translator_partition
+      - name: Generate partition artifact
+        env:
+          PYTHONPATH: translator_partition/pybf
+        run: |
+          mkdir -p results/tmp
+          python - <<'PY'
+          from pathlib import Path
+          from bfcontestpartition import build_partition_program
+          Path('results/tmp/compiler_partition.bf').write_text(build_partition_program(), encoding='ascii')
+          PY
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: d3c2eaebe17e1576fedef6e209f4ba82a8fa3bd2
+          path: translator_stream
+      - name: Generate streaming artifact
+        env:
+          PYTHONPATH: translator_stream/pybf
+        run: |
+          python translator_stream/tools/bench_tritium_streaming_abc.py \
+            --n 8 --pattern mixed \
+            --program results/tmp/compiler_abc153_stream.bf \
+            --input results/tmp/compiler_abc153_stream.in \
+            --expected results/tmp/compiler_abc153_stream.expected
+
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator_generic
+      - name: Generate generic artifacts
+        env:
+          PYTHONPATH: translator_generic/pybf
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+          from compiler_layout import compile_source
+          cases = {
+              'char_runtime_store': '''
+          chars = list(input())
+          i = int(input())
+          chars[i] = "X"
+          print("".join(chars))
+          ''',
+              'direct_join_input': '''
+          print("".join(list(input())))
+          ''',
+              'string_to_int': '''
+          s = input()
+          n = int(s)
+          print(n)
+          ''',
+              'int_to_string': '''
+          n = int(input())
+          s = str(n)
+          print(s)
+          ''',
+              'direct_int_input': '''
+          n = int(input())
+          print(n)
+          ''',
+          }
+          for name, source in cases.items():
+              Path(f'results/tmp/compiler_{name}.bf').write_text(
+                  compile_source(dedent(source)), encoding='ascii'
+              )
+          PY
+
+      - name: Profile realized channel costs
+        run: |
+          python experiments/profile_realized_payload_channels.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_realized_payload_channels_v1.json
+          python experiments/profile_realized_payload_channels.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+
+      - name: Verify full signed-periodic serialization
+        run: |
+          python experiments/verify_signed_periodic_call_runs.py --max-rules 128 --max-period 8 \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+
+      - name: Profile signed-periodic realized channel
+        run: |
+          python experiments/profile_signed_periodic_call_runs.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8 --json > results/tmp/compiler_signed_periodic_realized_v2.json
+          python experiments/profile_signed_periodic_call_runs.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8
+
+      - name: Verify VM-native grammar serialization
+        run: |
+          python experiments/verify_native_isa_signed_periodic.py --max-rules 128 --max-period 8 \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf
+
+      - name: Profile VM-native grammar channel
+        run: |
+          python experiments/profile_native_isa_signed_periodic.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8 --json > results/tmp/compiler_native_isa_signed_periodic_v1.json
+          python experiments/profile_native_isa_signed_periodic.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-period 8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: realized-payload-channels
+          path: |
+            results/tmp/compiler_realized_payload_channels_v1.json
+            results/tmp/compiler_signed_periodic_realized_v2.json
+            results/tmp/compiler_native_isa_signed_periodic_v1.json

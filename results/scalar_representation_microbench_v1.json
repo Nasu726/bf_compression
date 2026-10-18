@@ -1,0 +1,39 @@
+{
+  "revision": "Nasu726/Python_to_BF_Translator@6dcc60c1d38b92be901acc4383a158d254c1ecda",
+  "quad64": {
+    "word_cells": 99,
+    "optimized_bytes": {
+      "copy": 1789,
+      "add": 6059,
+      "sub": 8502,
+      "uge": 12822,
+      "set_const": 327
+    }
+  },
+  "base4": {
+    "word_cells": 66,
+    "optimized_bytes": {
+      "copy": 964,
+      "add": 2790,
+      "sub": 2795,
+      "uge": 4354,
+      "set_const": 245
+    },
+    "ratio_vs_quad": {
+      "copy": 0.53885,
+      "add": 0.46047,
+      "sub": 0.32875,
+      "uge": 0.33957,
+      "set_const": 0.74924
+    }
+  },
+  "packed_at_rest_existing_generic_bridge": {
+    "word_cells": 8,
+    "raw_copy_bytes": 1815,
+    "raw_set_const_bytes": 551,
+    "optimized_set_const_bytes": 487,
+    "raw_and_optimized_add_via_preserving_pack_to_quad_then_pack": 267627,
+    "warning": "The isolated packed-copy snippet optimized to zero because the optimizer can prove its source is zero on the initially-zero tape. That optimized zero is not a valid arbitrary-runtime copy cost; the raw 1815-byte figure is retained instead. The 267627-byte add figure demonstrates that the existing generic preserving conversion path is not a viable scalar arithmetic strategy, not that an optimized packed arithmetic backend is impossible."
+  },
+  "interpretation": "Base4 is simultaneously physically denser than Quad64 and materially shorter for the tested emitted arithmetic primitives. Existing generic packed-at-rest conversion is prohibitively source-expensive for arithmetic. Full-program Base4/radix integration should be evaluated before designing packed byte arithmetic from scratch."
+}

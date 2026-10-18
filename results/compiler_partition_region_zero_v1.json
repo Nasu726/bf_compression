@@ -1,0 +1,53 @@
+{
+  "date": "2026-09-16",
+  "source_repository": "Nasu726/Python_to_BF_Translator",
+  "source_ref": "main",
+  "source_commit": "0851b624364013041faa001db55cf9b90447cdef",
+  "generator": "bfcontestpartition.build_partition_program()",
+  "baseline_bytes": 363109,
+  "region_zero_bytes": 348310,
+  "saved_bytes": 14799,
+  "saved_percent": 4.075635690660381,
+  "removed_known_zero_loops": 715,
+  "removed_known_zero_loop_literal_bytes": 2173,
+  "removed_by_origin": {
+    "balanced_exit": 627,
+    "clear": 83,
+    "initial_zero": 2,
+    "moving_exit": 3
+  },
+  "removed_literal_bytes_by_origin": {
+    "balanced_exit": 1881,
+    "clear": 277,
+    "initial_zero": 6,
+    "moving_exit": 9
+  },
+  "semantic_deletion_enabled_additional_savings_bytes": 12626,
+  "differential_validation": {
+    "observables_compared": [
+      "output",
+      "input_consumed",
+      "final_pointer",
+      "full_30000_cell_tape"
+    ],
+    "cases": [
+      {"values": [1, 2, 3, 4], "output": "2\n", "baseline_steps": 446294, "region_zero_steps": 413996},
+      {"values": [5, -2, 10, 1234, -77], "output": "1144\n", "baseline_steps": 832292, "region_zero_steps": 771990},
+      {"values": [100], "output": "100\n", "baseline_steps": 345488, "region_zero_steps": 328295},
+      {"values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "output": "6\n", "baseline_steps": 918692, "region_zero_steps": 823981}
+    ],
+    "result": "passed"
+  },
+  "handwritten_corpus_savings_bytes": {
+    "dbfi.bf": 0,
+    "fibonacci.bf": 0,
+    "rot13.bf": 0,
+    "wc.bf": 0
+  },
+  "notes": [
+    "The compiler-generated BF had already passed the existing Python_to_BF_Translator bfopt optimizer.",
+    "The majority of directly removed loops are justified by balanced-loop exit zero facts, not moving-loop exit zero facts.",
+    "Only 2173 saved bytes are literal bytes of removed loops; the remaining 12626 bytes arise because semantic deletion also eliminates or coalesces otherwise necessary pointer/value routing around those no-op regions.",
+    "Differential testing supplements the semantic proof obligations and is not itself a proof for all programs."
+  ]
+}

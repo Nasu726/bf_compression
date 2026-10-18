@@ -1,0 +1,59 @@
+{
+  "baseline": {
+    "bf_bytes": 2066322,
+    "movement_bytes": 1906647,
+    "movement_fraction": 0.922725,
+    "nonmovement_bytes": 159675,
+    "movement_run_count": 74685,
+    "movement_run_mean": 25.528,
+    "movement_run_max": 1884,
+    "movement_bytes_in_runs_ge": {
+      "4": 1838943,
+      "8": 1785552,
+      "16": 1749019,
+      "32": 1680750,
+      "64": 1579537,
+      "128": 1282338
+    },
+    "movement_contexts": {
+      "static": {"movement_bytes": 1110017, "fraction_of_movement": 0.582183, "run_count": 49520},
+      "periodic": {"movement_bytes": 402418, "fraction_of_movement": 0.211061, "run_count": 15762},
+      "dynamic": {"movement_bytes": 394212, "fraction_of_movement": 0.206757, "run_count": 9403}
+    },
+    "capped_move_run_oracles": {
+      "1": {"movement_bytes": 74685, "result_bytes": 234360},
+      "2": {"movement_bytes": 112456, "result_bytes": 272131},
+      "4": {"result_bytes": 334033},
+      "8": {"result_bytes": 422939},
+      "16": {"result_bytes": 548569},
+      "32": {"result_bytes": 728310}
+    },
+    "loop_kinds": {"balanced": 40031, "moving": 238, "dynamic": 1752},
+    "moving_stride_histogram": {"2": 4, "3": 34, "7": 192, "66": 8},
+    "ten_x_target_bytes": 206632
+  },
+  "semantic_fixed_point": {
+    "bf_bytes": 1942406,
+    "movement_bytes": 1797391,
+    "movement_fraction": 0.925343,
+    "nonmovement_bytes": 145015,
+    "movement_run_count": 70903,
+    "movement_run_mean": 25.35,
+    "movement_run_max": 1884,
+    "capped_move_run_oracles": {
+      "1": {"result_bytes": 215918},
+      "2": {"result_bytes": 251764},
+      "4": {"result_bytes": 310334},
+      "8": {"result_bytes": 394023},
+      "16": {"result_bytes": 513133},
+      "32": {"result_bytes": 684915}
+    },
+    "gap_from_original_ten_x_target_at_cap1": 9286
+  },
+  "macro_negative_result": {
+    "literal_free_tandem_reroll_saved_bytes": 75,
+    "semantic_free_tandem_reroll_saved_bytes": 75,
+    "semantic_loop_dictionary_duplicate_upper_bound_bytes": 989001,
+    "interpretation": "Adjacent tandem rerolling has negligible opportunity even with free counters and scratch. Non-adjacent template duplication is large but standard BF has no free macro call primitive."
+  }
+}

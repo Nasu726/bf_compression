@@ -1,0 +1,114 @@
+{
+  "date": "2026-09-17",
+  "baseline_suite_bytes": 2066322,
+  "level1_bytes": 1944111,
+  "combined_bytes": 1943573,
+  "level1_saved_bytes": 122211,
+  "incremental_dead_affine_saved_bytes": 538,
+  "total_saved_bytes": 122749,
+  "total_saved_percent_weighted": 5.940458457103975,
+  "incremental_percent_of_level1_output": 0.02767331700710505,
+  "rewritten_producer_loops": 82,
+  "pruned_target_updates": 82,
+  "opportunity_estimate_matched_actual_bytes": true,
+  "representative_full_state_differential_artifacts_passed": 7,
+  "proof_scope": {
+    "producer": "flat pointer-balanced arithmetic loop",
+    "target": "non-control target offset",
+    "kill": "same relative frame reaches an unconditional [-] on the target before any unrecognized loop/barrier",
+    "observations": "target is not read by . or , before the kill; comma remains conservative because EOF-no-change may depend on the old cell value",
+    "intervening_operations": "pointer moves, +/- arithmetic, and clears of other cells only"
+  },
+  "artifacts": [
+    {
+      "name": "partition",
+      "baseline_bytes": 363109,
+      "level1_bytes": 348310,
+      "combined_bytes": 348294,
+      "incremental_saved_bytes": 16,
+      "total_saved_bytes": 14815,
+      "total_saved_percent": 4.080042081028011,
+      "rewritten_producer_loops": 4,
+      "pruned_target_updates": 4,
+      "full_state_differential": "passed on 4 workloads"
+    },
+    {
+      "name": "abc153_stream_n8_mixed",
+      "baseline_bytes": 297843,
+      "level1_bytes": 273901,
+      "combined_bytes": 273676,
+      "incremental_saved_bytes": 225,
+      "total_saved_bytes": 24167,
+      "total_saved_percent": 8.114006372484832,
+      "rewritten_producer_loops": 27,
+      "pruned_target_updates": 27,
+      "full_state_differential": "passed on representative mixed workload"
+    },
+    {
+      "name": "char_runtime_store_join",
+      "baseline_bytes": 430146,
+      "level1_bytes": 394308,
+      "combined_bytes": 394230,
+      "incremental_saved_bytes": 78,
+      "total_saved_bytes": 35916,
+      "total_saved_percent": 8.34972311726716,
+      "rewritten_producer_loops": 10,
+      "pruned_target_updates": 10,
+      "full_state_differential": "passed for abcdef / index 3 -> abcXef"
+    },
+    {
+      "name": "direct_join_input",
+      "baseline_bytes": 38200,
+      "level1_bytes": 36069,
+      "combined_bytes": 36066,
+      "incremental_saved_bytes": 3,
+      "total_saved_bytes": 2134,
+      "total_saved_percent": 5.586387434554974,
+      "rewritten_producer_loops": 1,
+      "pruned_target_updates": 1,
+      "full_state_differential": "passed on representative abcdef input"
+    },
+    {
+      "name": "string_to_int",
+      "baseline_bytes": 341636,
+      "level1_bytes": 318274,
+      "combined_bytes": 318271,
+      "incremental_saved_bytes": 3,
+      "total_saved_bytes": 23365,
+      "total_saved_percent": 6.839150440820054,
+      "rewritten_producer_loops": 1,
+      "pruned_target_updates": 1,
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "int_to_string",
+      "baseline_bytes": 401007,
+      "level1_bytes": 389952,
+      "combined_bytes": 389814,
+      "incremental_saved_bytes": 138,
+      "total_saved_bytes": 11193,
+      "total_saved_percent": 2.791223095856182,
+      "rewritten_producer_loops": 30,
+      "pruned_target_updates": 30,
+      "full_state_differential": "passed on representative 123 input"
+    },
+    {
+      "name": "direct_int_input",
+      "baseline_bytes": 194381,
+      "level1_bytes": 183297,
+      "combined_bytes": 183222,
+      "incremental_saved_bytes": 75,
+      "total_saved_bytes": 11159,
+      "total_saved_percent": 5.740787422639044,
+      "rewritten_producer_loops": 9,
+      "pruned_target_updates": 9,
+      "full_state_differential": "passed on representative 123 input"
+    }
+  ],
+  "validation_notes": [
+    "The conservative opportunity profiler predicted 538 bytes of local loop savings; the implemented transformation saved exactly 538 bytes after Level 1.",
+    "Synthetic differential tests cover output observation, conservative input/EOF handling, multiple killed targets, nested lexical scopes, and fresh relative frames after moving loops.",
+    "An initial nested test used a deliberately nonterminating enclosing loop and compared arbitrary step-limit tape states. It failed even though both programs remained nonterminating and reconverged at each proved kill point. The test was replaced by a terminating nested case because fixed-instruction-count intermediate tape equality is stronger than Brainfuck semantic equivalence under source-size-changing rewrites.",
+    "All seven compiler-generated artifacts pass representative full-state differential execution for output, input consumption, final pointer, and full memory on terminating workloads."
+  ]
+}
