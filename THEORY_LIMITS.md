@@ -316,7 +316,7 @@ its visible output/input trace up to divergence. QED.
 If S is at distance d from A, the precise source length is
 
 ```
-L_wrapper = L(B) + min(k,256-k) + 4*d + 4
+L_wrapper = L(B) + min(k,256-k) + 4*d + 3
 ```
 
 because the two loop brackets, the counter decrement and the
