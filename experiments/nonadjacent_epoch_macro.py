@@ -46,11 +46,11 @@ class EpochFacts:
         return self.overrides.get(cell, self.default)
 
 
-def analyze_prefix(prefix: str) -> EpochFacts:
+def analyze_prefix(prefix: str, *, initial_zero_tape: bool = True) -> EpochFacts:
     """Conservative, termination-conditional exact byte facts at a boundary."""
     nodes = parse(prefix)
     known: dict[int, int | None] = {}
-    default: int | None = 0
+    default: int | None = 0 if initial_zero_tape else None
     ptr = 0
     barriers = 0
 
@@ -140,6 +140,7 @@ def construct_epoch_phase_reuse(
     suffix: str = "",
     *,
     max_scratch_offset: int = 96,
+    initial_zero_tape: bool = True,
 ) -> PhaseResult:
     if not gaps:
         raise ValueError("need >=2 occurrences of the same macro")
@@ -155,7 +156,7 @@ def construct_epoch_phase_reuse(
             return PhaseResult(original, original, False, len(gaps)+1, len(macro), -1, -1)
         touched.update(extra)
 
-    facts = analyze_prefix(prefix)
+    facts = analyze_prefix(prefix, initial_zero_tape=initial_zero_tape)
     calls = len(gaps) + 1
     anchor = 256  # synthetic nonnegative coordinates for code generation
     for distance in range(1, max_scratch_offset - calls):
