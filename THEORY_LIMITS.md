@@ -276,3 +276,125 @@ the legacy optimizer's ABI, add and verify a pointer-repair suffix,
 or reject outputs that do not satisfy full-state equivalence. It is
 incorrect to compare full-state-exact candidates against a weaker
 optimizer and assume equivalent behavior without a repair.
+
+
+## 11. Constructive executable RLSLP macro theorem
+
+Implementations:
+
+* `experiments/one_cell_counted_macro.py`
+* `experiments/nested_executable_grammar.py`
+* `experiments/global_scratch_reroll.py`
+
+### A counted block
+
+Suppose `B` is a standard BF fragment that starts and ends with pointer
+at anchor cell `A` (on termination), and there exists a cell `S`
+which is initially zero and is **never read or written by B** or the
+surrounding original program. Let `P` be the shortest pointer route
+from `A` to `S`, and `P^{-1}` its exact inverse. For
+`1<=k<=255`, the direct BF macro
+
+```
+P  INIT_8(k)  [ P^{-1}  B  P  - ]  P^{-1}
+```
+
+is observationally equivalent to `B` repeated `k` times, when
+inserted at the same control-flow point in the original program.
+
+**Proof.** Initially S is zero. `INIT_8(k)` sets it to k modulo
+256 without touching another cell. Each successful traversal of the
+outer loop visits A, executes precisely one original B, returns to S
+(on a terminating B), and decrements S once. B does not modify S,
+so after exactly k completed B invocations S is zero and the loop
+exits. The wrapper returns the pointer to A. Every other tape cell
+has precisely the same changes as the unrolled B sequence, and I/O
+commands execute in the same order. If a B invocation diverges,
+both programs diverge inside the same occurrence of B, preserving
+its visible output/input trace up to divergence. QED.
+
+If S is at distance d from A, the precise source length is
+
+```
+L_wrapper = L(B) + min(k,256-k) + 4*d + 4
+```
+
+because the two loop brackets, the counter decrement and the
+initializer account for three fixed commands plus the return
+convention (the implementation's constructor determines the exact
+fixed constant). **Always measure the emitted BF string directly**
+rather than relying on this accounting shorthand: e.g. for d=1
+the exact program `>INIT[<B>-]<` has
+`L(B) + min(k,256-k) + 8` source characters.
+
+The proof requires a known-zero scratch precondition and does not
+authorize borrowing a cell merely because its value happens to be
+zero in a few test inputs. Standard zero-initialized BF and
+a globally unreferenced cell provide a sufficient witness.
+
+### Recursive grammar
+
+For grammar nodes `Run(child,k)`, allocate distinct counter cells
+at strictly increasing depths. Each compiled child starts/ends at
+anchor A and touches only A and deeper private counters, never a
+parent counter. Induction on grammar nesting yields the same theorem.
+A depth-r grammar with counts `k_1,..,k_r` executes its terminal
+`product_i k_i` times while encoding the terminal source only
+once. This yields a genuine exponential difference between
+unrolled length and executable description length for repetitive
+families. It makes no claim that **arbitrary** BF can be exponentially
+compressed.
+
+CI exercised 115 nested-grammar full-state examples:
+
+* 65,025 outputs `.` -> **21** BF chars;
+* 65,025 invocations `+.` -> **22** BF chars;
+* 289 invocations `+.-.` -> **56** BF chars.
+
+These figures count **actual, standalone runnable BF**, not compressed
+payload estimates. Runtime may be enormous, which is allowed because
+the primary optimization objective is source length.
+
+### Static unused scratch in general BF
+
+If every nested loop has static net pointer displacement zero, the
+whole program's pointer footprint is finite and can be extracted
+by lexical scanning. Record every cell touched by `+,-,.,,,[,]`;
+a cell not in that set is a *globally unused witness*. It can be
+borrowed even if the pointer crosses it using `<,>`. Once a
+balanced repeated lexical block is recognized, the source-cost DP
+chooses a nearby globally unused cell and computes exact loop
+wrapper source length. Programs with moving loops or invalid
+left-boundary excursions are conservatively rejected.
+
+The verifier `experiments/verify_global_scratch_reroll.py` passed
+88 full-memory differential cases, including actual I/O and nested
+loops, with input-consumption equality.
+
+This static whole-program approach is not enough for the seven
+compiler artifacts containing moving/dynamic loops; further epoch
+and liveness reasoning is required.
+
+## 12. Counting obstruction to uniform compression
+
+Fix a no-input BF runtime model and consider arbitrary length-n
+output byte strings on terminating programs. There are `256^n`
+different outputs. There are fewer than `8^{L+1}/7` syntactically
+valid *candidate* BF sources of length <=L (the count includes
+invalid BF strings, so it is an upper bound). Therefore not every
+length-n output can have a self-contained BF program of length
+<=L when
+
+```
+8^{L+1}/7 < 256^n.
+```
+
+Equivalently, some n-byte outputs require roughly
+`(8/3)n-O(1)` BF source characters, even before demanding a
+particular final tape/pointer.
+
+This is a counting/incompressibility argument, **not** a lower
+bound for any specific input program nor for a structured
+compiler-generated test suite. Thousands-fold compression on
+regular repetitive programs and an impossibility of uniform 10x
+for arbitrary high-information semantics are consistent.
