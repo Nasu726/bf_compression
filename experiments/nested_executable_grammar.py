@@ -51,11 +51,21 @@ Node = Term | Run
 
 
 def validate_terminal(body: str) -> None:
-    # Only [-] is allowed as a loop and all opcodes preserve pointer 0.
+    # Every instruction, including nested loops, remains on data cell 0.
+    # Thus terminal executions never access private counter cells. Input is
+    # intentionally excluded until the EOF/runtime convention is specified.
     if any(ch not in _ALLOWED for ch in body):
-        raise ValueError("one-cell terminal contains pointer/I/O-input command")
-    if "[" in body.replace("[-]", "") or "]" in body.replace("[-]", ""):
-        raise ValueError("unsupported terminal loop syntax")
+        raise ValueError("one-cell terminal contains pointer/input command")
+    nesting = 0
+    for char in body:
+        if char == "[":
+            nesting += 1
+        elif char == "]":
+            nesting -= 1
+            if nesting < 0:
+                raise ValueError("unmatched terminal closing bracket")
+    if nesting:
+        raise ValueError("unmatched terminal opening bracket")
 
 
 def compile_node(node: Node, active_depth: int = 0) -> str:
