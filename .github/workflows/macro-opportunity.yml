@@ -239,6 +239,28 @@ jobs:
               print(f"{row['name']}: {row['baseline_bytes']:,}->{row['rewritten_bytes']:,}; changed={row['changed_loops']:,}; saved={row['saved_bytes']:,}")
           PY
 
+      - name: Profile epoch-local nonadjacent source sharing
+        run: |
+          python experiments/profile_epoch_macro_corpus.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --json > results/tmp/compiler_epoch_nonadjacent_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_epoch_nonadjacent_v1.json').read_text())
+          total=sum(r['baseline_chars'] for r in rows)
+          saved=sum(r['saved_chars'] for r in rows)
+          print(f'epoch_nonadjacent: total={total:,} saved={saved:,} result={total-saved:,} fraction={saved/total:.5%}')
+          for r in rows:
+              print(f"{r['name']}: saved={r['saved_chars']:,}; epochs={r['root_epochs']} bounded={r['bounded_eligible_root_epochs']} groups={r['inspected_repeat_groups']}")
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: macro-opportunity
@@ -247,3 +269,4 @@ jobs:
             results/tmp/compiler_layout_headroom.json
             results/tmp/compiler_move_distances.json
             results/tmp/compiler_affine_resynthesis_v1.json
+            results/tmp/compiler_epoch_nonadjacent_v1.json
