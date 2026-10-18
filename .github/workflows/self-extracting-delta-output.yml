@@ -34,6 +34,8 @@ on:
       - 'experiments/verify_mine_nonadjacent_macro.py'
       - 'experiments/nonadjacent_epoch_macro.py'
       - 'experiments/verify_nonadjacent_epoch_macro.py'
+      - 'experiments/mine_epoch_nonadjacent_macro.py'
+      - 'experiments/verify_mine_epoch_nonadjacent_macro.py'
       - 'experiments/self_extracting_balanced_octal_channel.py'
       - 'experiments/verify_self_extracting_balanced_octal_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
@@ -117,3 +119,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_nonadjacent_epoch_macro.py
+      - name: Verify automatic epoch-aware nonadjacent BF grammar
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_mine_epoch_nonadjacent_macro.py
