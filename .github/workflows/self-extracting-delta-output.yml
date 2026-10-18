@@ -28,6 +28,8 @@ on:
       - 'experiments/verify_nested_executable_grammar.py'
       - 'experiments/global_scratch_reroll.py'
       - 'experiments/verify_global_scratch_reroll.py'
+      - 'experiments/nonadjacent_phase_macro.py'
+      - 'experiments/verify_nonadjacent_phase_macro.py'
       - 'experiments/self_extracting_balanced_octal_channel.py'
       - 'experiments/verify_self_extracting_balanced_octal_channel.py'
       - '.github/workflows/self-extracting-delta-output.yml'
@@ -99,3 +101,7 @@ jobs:
         env:
           PYTHONPATH: translator/pybf:experiments
         run: python experiments/verify_global_scratch_reroll.py
+      - name: Verify runnable non-adjacent phase-dispatched macros
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_nonadjacent_phase_macro.py
