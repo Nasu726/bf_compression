@@ -398,3 +398,98 @@ bound for any specific input program nor for a structured
 compiler-generated test suite. Thousands-fold compression on
 regular repetitive programs and an impossibility of uniform 10x
 for arbitrary high-information semantics are consistent.
+
+
+## 13. One-copy nonadjacent BF macros via descending phase dispatch
+
+Implementations:
+
+* `experiments/nonadjacent_phase_macro.py` — construct direct executable
+  BF with one copy of a repeated macro body;
+* `experiments/mine_nonadjacent_macro.py` — bounded, exact-source-cost
+  discovery within a globally static tape footprint;
+* `experiments/nonadjacent_epoch_macro.py` — local zero-scratch proof
+  after moving/dynamic loop barriers;
+* `experiments/mine_epoch_nonadjacent_macro.py` — root-scope
+  relative-epoch macro discovery.
+
+The original fragment may be
+
+```
+B Q_0 B Q_1 B ... Q_(k-2) B
+```
+
+where `B` and every gap `Q_i` are recursively pointer-balanced at
+the **same runtime anchor**, but the gaps need not match one another.
+A proof witness supplies `k+1` distinct scratch cells initially zero
+at the fragment entry and untouched by the original fragment.
+
+**Construction.** Place a 1-valued controlling flag in one scratch
+cell and a one-hot phase token in the first of the remaining k flag
+cells. Each iteration of a standard BF `[...]` loop executes **one
+literal copy of B** and scans the phase flags in *descending order*.
+For phase i<k-1, consume its flag, execute Q_i once at the original
+anchor, and set the next phase flag. For the last phase, consume its
+flag and clear the loop controller. Descending dispatch ensures that a
+freshly armed phase i+1 has already been scanned in the current
+iteration and cannot execute until the next iteration.
+
+**Proof by phase induction.** Before loop iteration i, the controlling
+cell is 1 and exactly phase i is flagged. B executes once, producing
+the same state and I/O as the i-th literal occurrence of B. If i<k-1,
+only Q_i executes, leaving the same state as after that original gap;
+phase i+1 becomes the unique flagged phase. If i=k-1, no gap executes
+and the controlling cell is set to zero. Thus the loop runs exactly k
+iterations; all phase flags and the controlling cell are zero on exit,
+and the physical pointer is back at the original anchor. If B or Q_i
+diverges, the transformed program reaches the corresponding execution
+with an identical original tape state and I/O trace, so divergence is
+preserved as well.
+
+**Source-cost limitation.** A direct one-hot dispatcher costs roughly
+quadratic in k and has potentially expensive moves between the anchor
+and each flag. The optimizer therefore emits this variant only if the
+actual complete standard-BF source is strictly shorter than the
+literal original. It does not claim that this dispatcher is the
+optimal interpreter architecture.
+
+**Locally proven zero scratch.** The initially-zero phase cells need
+not remain unused over the *entire* program. It suffices to prove
+their exact zero values at the fragment's entry, no accesses by B or
+its gaps, and restoration to zero before the suffix. The prefix
+abstract interpreter conservatively tracks exact 8-bit values, makes
+`,` unknown regardless of EOF policy, summarizes pointer-balanced
+loops by forgetting their written targets, and knows that their
+terminating exit control cell is zero. For any moving/dynamic loop
+that terminates, the analyzer abandons absolute tape coordinates,
+starts a new pointer-relative epoch, and retains **only the exit
+cell at relative offset zero is zero**. Fresh explicit clear loops
+may then establish scratch zeros at known relative offsets, even
+though the absolute pointer is unknown. This proof supports a
+moving-loop prefix without falsely claiming a globally unused
+absolute tape cell.
+
+For nested lexical scopes, zero initialization at loop-body entry
+cannot be assumed; the first epoch-aware automatic miner currently
+operates only in the root scope. Extension to inner scopes requires
+unknown-initial-state facts and recursion with scope-relative
+preconditions.
+
+**Verified synthetic results.**
+
+| Construct | Full-memory test cases | Literal BF chars | Executable BF chars |
+| --- | ---: | ---: | ---: |
+| Manually identified nonadjacent macro | 69 | 60,852 | 22,295 |
+| Automatic global-static miner | 22 | 13,805 | 6,248 |
+| Manually witnessed post-moving-loop zero scratch | 55 | 39,895 | 19,299 |
+| Automatic relative-epoch miner | 22 | 11,530 | 6,592 |
+
+The cases were intentionally designed to expose these macro structures.
+These totals are **not** the seven compiler artifact results. A separate
+CI workflow measures the bounded root-scope opportunity in that actual
+suite.
+
+This establishes that nonadjacent code reuse is achievable in directly
+executable BF without a full virtual machine in proof-certified scopes.
+It does *not* yet solve general nonadjacent semantic grammar execution,
+dynamic tape-layout isolation, or final 10x compression on the corpus.
