@@ -261,6 +261,29 @@ jobs:
               print(f"{r['name']}: saved={r['saved_chars']:,}; epochs={r['root_epochs']} bounded={r['bounded_eligible_root_epochs']} groups={r['inspected_repeat_groups']}")
           PY
 
+      - name: Profile nested-scope executable macro opportunities
+        run: |
+          python experiments/profile_nested_scope_corpus.py \
+            results/tmp/compiler_partition.bf \
+            results/tmp/compiler_abc153_stream.bf \
+            results/tmp/compiler_char_runtime_store.bf \
+            results/tmp/compiler_direct_join_input.bf \
+            results/tmp/compiler_string_to_int.bf \
+            results/tmp/compiler_int_to_string.bf \
+            results/tmp/compiler_direct_int_input.bf \
+            --max-scopes 72 --json > results/tmp/compiler_nested_scope_macro_v1.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=json.loads(Path('results/tmp/compiler_nested_scope_macro_v1.json').read_text())
+          total=sum(row['original_chars'] for row in rows)
+          saved=sum(row['saved_chars'] for row in rows)
+          checked=sum(row['considered_scopes'] for row in rows)
+          print(f'nested_scope_total={total:,}; saved={saved:,}; result={total-saved:,}; checked_scopes={checked:,}')
+          for row in rows:
+              print(f"{row['name']}: saved={row['saved_chars']:,}; loops={row['eligible_lexical_loops']:,}; checked={row['considered_scopes']:,}; selected={row['selected']}")
+          PY
+
       - uses: actions/upload-artifact@v4
         with:
           name: macro-opportunity
@@ -270,3 +293,4 @@ jobs:
             results/tmp/compiler_move_distances.json
             results/tmp/compiler_affine_resynthesis_v1.json
             results/tmp/compiler_epoch_nonadjacent_v1.json
+            results/tmp/compiler_nested_scope_macro_v1.json

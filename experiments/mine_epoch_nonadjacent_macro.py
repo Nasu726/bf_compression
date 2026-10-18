@@ -178,7 +178,10 @@ def mine_epoch_macros(
                     prefix_source=source[:offsets[at]]
                     last=call_positions[-1]+p-1
                     suffix=source[offsets[last]+len(atoms[last]):]
-                    result=construct_epoch_phase_reuse(\n                        prefix_source, macro, gaps, suffix,\n                        initial_zero_tape=initial_zero_tape\n                    )
+                    result=construct_epoch_phase_reuse(
+                        prefix_source, macro, gaps, suffix,
+                        initial_zero_tape=initial_zero_tape
+                    )
                     if len(result.source)<len(best):
                         best=result.source
                         best_macro_chars=len(macro)

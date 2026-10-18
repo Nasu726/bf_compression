@@ -643,3 +643,41 @@ with unknown initial cell values can test the former. A
 grammar-threaded VM or compiler-level semantic backend is required
 for the latter. Keep the ~82k grammar figure labeled as payload-only
 until a self-contained decoder+VM+cleanup program is measured.
+
+
+## 2026-10-18 — Nested lexical-scope macro investigation
+
+The original root-only epoch-aware search measured zero savings on the
+2,066,322-character seven-artifact compiler baseline. We therefore
+extended the proof-gated search into BF loop bodies. Loop-body entry
+tape values are UNKNOWN, even when the whole program starts from a
+zero tape: only a local clear or other established invariant may certify
+scratch cells. The underlying local-zero constructor also remains
+conservative about input and moving-loop coordinates.
+
+A separate offline opportunity scan over the available **1,942,406-char
+fixed-point BF corpus** detected repeated balanced blocks inside nested
+loop bodies. For example, in the largest 72 eligible loop bodies of the
+ABC153 streaming artifact, 374 sets of exact nonadjacent block repeats
+were found by a bounded syntactic scanner. This is *not* executable
+compression: a phase dispatcher additionally needs enough proven-zero
+private scratch cells.
+
+An offline shadow implementation, with proof-gated scratch allocation
+and a full-state 8-bit BF interpreter, passed 96 nested-program
+differential cases; 94 were profitable. On the available fixed-point
+seven-artifact corpus, however, the restricted top-72-scope search
+saved **zero chars (1,942,406 -> 1,942,406)**. The sample exposes a
+clear distinction between repeat candidates and actually usable
+certified scratch. This is a bounded negative result, not a global
+noncompressibility claim.
+
+The research branch now carries
+`experiments/profile_nested_scope_corpus.py`, run against the
+**original 2,066,322-char pinned corpus** by
+`.github/workflows/macro-opportunity.yml`. It separately reports
+those authoritative source-size measurements.
+
+Priority remains a *grammar-threaded standard-BF execution
+architecture* or more efficient representation of parameters, not
+unbounded expansions of this narrow one-hot phase-dispatch heuristic.
