@@ -57,7 +57,7 @@ def mine_nonadjacent(
     max_atoms: int = 4_000,
     max_period: int = 256,
     max_calls: int = 6,
-    max_groups: int = 96,
+    max_groups: int = 32,
     min_macro_chars: int = 36,
 ) -> MiningResult:
     footprint = analyze_global_static(source)
@@ -126,7 +126,15 @@ def mine_nonadjacent(
     for _, key, starts in ranks[:max_groups]:
         considered += 1
         p = key[1]
-        for i in range(len(starts) - 1):
+        # Bounded source-cost probe: long periodic sequences can produce
+        # thousands of equal substrings, which would make exhaustive
+        # (start,window) source reconstruction quadratic or worse.
+        sample = sorted(set(
+            list(range(min(8, len(starts)-1)))
+            + [max(0, len(starts)//2 - 2), max(0, len(starts)//2)]
+            + [max(0, len(starts)-max_calls), max(0, len(starts)-2)]
+        ))
+        for i in sample:
             for k in range(2, min(max_calls, len(starts)-i)+1):
                 selected = starts[i:i+k]
                 macro_start = selected[0]
