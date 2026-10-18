@@ -482,3 +482,97 @@ matched). Future composition must explicitly repair or reject such
 outputs under this project's stronger equivalence contract.
 
 Proof details and restrictions are maintained in `THEORY_LIMITS.md`.
+
+
+## 2026-10-18 — Runnable counted macro grammars, including recursive RUN
+
+A significant distinction from the semantic bytecode *payload* work:
+the constructions in this section emit **ordinary, standalone executable
+Brainfuck**. Every macro counter is allocated in an initially-zero
+private scratch cell, consumed at runtime, and zeroed before termination.
+Pointer and full tape state agree with the literal expansion.
+
+### Costed one-cell macro RUNs
+
+`experiments/one_cell_counted_macro.py` finds the cheapest segmentation
+of one-cell A/O/C operations into literal operations or bounded
+repetitions of a short operation sequence. The search is a
+source-length-weighted suffix DP, so all BF instructions for the
+counter, bracket pair, routing and final cleanup are charged.
+For a block `B` operating only on cell 0 and repeat count
+`1<=k<=255`:
+
+```
+> INIT(k) [ < B > - ] <
+```
+
+is a literal standard-BF expansion of `B^k`, using cell 1 as the
+private counter. The body may contain output and clears and need not
+preserve its entry value; every iteration has the same operational
+effect as the next unrolled copy.
+
+CI passed **1,365 exhaustive short-sequence cost checks** and
+**102 full-tape differential tests**, including input-independent
+mixed updates and repeated output.
+
+Example runnable source-size savings:
+
+| Repeated workload | Literal BF | RUN BF |
+| --- | ---: | ---: |
+| emit ASCII `ABC` 255 times | 1,850 | **80** |
+| emit same zero byte 255 times | 255 | **9** |
+| `ADD(1); OUT` repeated 255 times | 510 | **10** |
+
+The `ABC` trace retains its cell state, output and all scratch cells;
+the short output-arithmetic-progression grammar does **not** compress
+that trace in the current restricted family. Conversely, `ADD(1); OUT`
+can be synthesized as an even shorter six-character arithmetic-output
+loop, confirming the need for a *portfolio* rather than a single rule.
+
+The experimental DP scans bounded period/repeat candidates and is not
+yet the near-linear production implementation. Its correctness proof
+relies on a private zero cell and the one-cell frame.
+
+### Recursive RUN grammars
+
+`experiments/nested_executable_grammar.py` accepts a terminal with
+balanced BF brackets, and no tape movement/input, and a nested grammar
+`Run(child,count)`. At depth `d` it uses counter cell `d+1`; the
+child executes anchored at data cell 0 and may itself use *deeper*
+private counters. By induction each level preserves the parent counter
+and restores all child scratch to zero. Nested loops in the terminal
+are permitted. If the terminal fails to terminate, the direct and
+macro variants exhibit the same first divergent iteration.
+
+Full-state CI passed **115 cases**, including 65,025 executions of
+an output instruction with two 255-valued counters, randomized nesting
+depths and a two-level exact factor-cost selection.
+
+| Runnable repeated body | Literal BF | Nested executable BF |
+| --- | ---: | ---: |
+| `.` repeated `255*255` times | 65,025 | **21** |
+| `+.` repeated `255*255` times | 130,050 | **22** |
+| `+.-.` repeated `17*17` times | 1,156 | **56** |
+
+The first two ratios are thousands-fold in deliberately repetitive
+synthetic programs. **They are not evidence of equivalent compression
+opportunity in the pinned seven-artifact compiler suite.** In particular,
+the adjacent balanced tandem profiler previously estimated only 75
+bytes of optimistic saving there. Actual corpus headroom must be
+re-measured under any expanded macro grammar before generalizing.
+
+### Global unused-cell frame
+
+`experiments/global_scratch_reroll.py` extends this beyond cell-0
+fragments, conditional on a *static global tape-footprint proof*: all
+loops must be pointer-balanced, the execution never crosses cell 0,
+and a scratch cell S is provably never read or written by the original
+program. When a syntactically repeated body B returns to anchor A, the
+counter can be borrowed from S, even if original pointer routing passes
+through S. The block may contain output, input and nested loops.
+
+The exact wrapper cost includes every move A->S and S->A.
+A bounded suffix DP chooses profitable contiguous macro occurrences.
+Programs with moving/dynamic loops or prohibitive atom count are
+left unchanged. This is a direct executable construction, not a
+grammar-threaded VM or a general solution for arbitrary BF programs.
