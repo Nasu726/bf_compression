@@ -681,3 +681,21 @@ those authoritative source-size measurements.
 Priority remains a *grammar-threaded standard-BF execution
 architecture* or more efficient representation of parameters, not
 unbounded expansions of this narrow one-hot phase-dispatch heuristic.
+
+
+### Original compiler corpus result (confirmed by CI)
+
+The `macro-opportunity` workflow on the pinned original corpus
+completed successfully: **2,066,322 -> 2,066,322 BF chars**, zero
+profitable nested-scope nonadjacent rewrites. The bounded miner examined
+**455 lexical scopes** across the seven artifacts (72 scopes per
+artifact where available). Together with the fixed-point corpus
+negative result, this is evidence that the direct one-hot dispatcher
+is not a promising main route to the 10x target under current proof
+preconditions. It is *not* a global noncompressibility bound.
+
+The initial nested-scope CI failure was traced to one invalid fixture
+which moved left from tape cell zero, not to a compressor semantic
+mismatch. After replacing that fixture with valid pointer-balanced
+BF, the entire 22-case original nested verifier passed offline
+alongside 96 additional independent full-memory shadow tests.
