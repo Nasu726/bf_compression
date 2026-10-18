@@ -576,3 +576,70 @@ A bounded suffix DP chooses profitable contiguous macro occurrences.
 Programs with moving/dynamic loops or prohibitive atom count are
 left unchanged. This is a direct executable construction, not a
 grammar-threaded VM or a general solution for arbitrary BF programs.
+
+
+## 2026-10-18 — Nonadjacent direct-BF sharing: positive proofs, negative compiler-corpus result
+
+We now have a runnable **one-copy nonadjacent macro** construction using a
+descending phase dispatcher instead of a general BF interpreter. For
+`B Q0 B Q1 B ... B`, B is stored only once in source. Dedicated phase
+flags select the intervening Q blocks in their original order, and all
+flags are zeroed before the suffix. The phase-state induction and proof
+preconditions are in `THEORY_LIMITS.md`, Section 13.
+
+The experiments proved and full-state tested:
+
+| Proven constructor/discovery | Cases | Raw BF chars | Runnable BF chars |
+| --- | ---: | ---: | ---: |
+| Explicit globally-unused scratch | 69 | 60,852 | 22,295 |
+| Automatic global static-footprint miner | 22 | 13,805 | 6,248 |
+| Explicit local known-zero scratch after moving barriers | 55 | 39,895 | 19,299 |
+| Automatic top-level relative-epoch miner | 22 | 11,530 | 6,592 |
+
+`nonadjacent_epoch_macro.py` strengthens the scratch proof. The scratch
+cells need not be untouched by the entire program: it is sufficient that
+they are **known zero at the macro region's entry**, remain untouched by
+the original macro/gaps, and are restored to zero before the suffix.
+An abstract interpreter tracks exact or unknown cells modulo 256, treats
+input as unknown, and resets its coordinate frame after terminating
+moving loops while retaining the known-zero exit cell. This is the
+missing bridge between root-level static scratch and moving-loop
+programs. The direct BF transformations run without an auxiliary
+input data file, and full-state differential verification succeeded.
+
+However, the new `profile_epoch_macro_corpus.py` measured this bounded
+**root lexical scope** pass on the actual seven pinned compiler artifacts:
+
+```
+original total  = 2,066,322 chars
+candidate total = 2,066,322 chars
+saving          =         0 chars
+```
+
+The successfully completed `macro-opportunity` workflow reported:
+
+| Artifact | Root epochs | Epochs within 2500-atom budget | Savings |
+| --- | ---: | ---: | ---: |
+| partition | 10 | 10 | 0 |
+| ABC153 streaming | 5 | 2 | 0 |
+| char runtime store | 8 | 1 | 0 |
+| direct join | 1 | 1 | 0 |
+| string-to-int | 69 | 68 | 0 |
+| int-to-string | 68 | 65 | 0 |
+| direct int input | 67 | 65 | 0 |
+
+The root search is limited to short block periods and the 8
+highest-scoring occurrence groups per epoch, so zero measured saving
+is **not a formal bound on all source sharing**. Nevertheless, no
+profitable opportunity was exposed under this particular sufficient
+condition and budget. Do not extrapolate 2x synthetic gains to compiler
+outputs.
+
+Research implication: stop treating more aggressive root-scoped phase
+dispatch as the main 10x path. The remaining large opportunity is
+nonadjacent/repeated semantic templates *inside nested lexical scopes*
+and across differing logical tape positions. Recursive scope mining
+with unknown initial cell values can test the former. A
+grammar-threaded VM or compiler-level semantic backend is required
+for the latter. Keep the ~82k grammar figure labeled as payload-only
+until a self-contained decoder+VM+cleanup program is measured.
