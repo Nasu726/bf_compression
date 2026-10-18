@@ -771,3 +771,77 @@ compiler source; replace one-hot call records with a denser encoded
 symbol stream; connect relational/periodic rules; extend beyond
 bounded W and restore arbitrary final pointer. Do not label this as
 the end-to-end 10x result.
+
+
+## 2026-10-18 — Numeric opcode and RLE threaded BF dictionary
+
+A complete-source size portfolio now compares executable bounded-window
+dictionary grammars, rather than extrapolating from compressed payload bytes.
+New files:
+* \`experiments/threaded_grammar_portfolio.py\`
+* \`experiments/verify_threaded_grammar_portfolio.py\`
+* \`.github/workflows/threaded-grammar-portfolio.yml\`
+
+Four *standalone, executable standard-BF* dictionary formats are compared
+against untouched literal BF:
+
+1. Existing one-hot macro call records of width \`W+K+1\`, where W is the
+   number of logical tape cells and K is the number of dictionary macros.
+2. **Numeric opcode** records of width **W+4**, independent of K (K<=128).
+   Each record contains \`[W data,Q,T,R,live]\`. The dispatcher tests Q
+   against successive symbols by destructive transfer and restoration
+   through T,R. After a match, a sentinel value prevents double dispatch.
+3. **One-hot counted RUN** records of width **W+K+2**, containing a
+   modulo-256 repeat count; the selected dictionary body executes that
+   many times directly via a BF loop while preserving all W data cells.
+4. **Numeric counted RUN** records of width **W+5**, combining the two
+   encodings and using a single numeric opcode test per run.
+
+In each case, only one literal copy of each used macro appears in
+the dispatcher, records are stored in reverse call order, the current
+W-byte logical data window is transferred to the previous record on
+completion, and *all temporary record fields are zeroed*. The final
+physical cells [0,W) and pointer at zero match literal expansion.
+The test uses 8-bit wrapping cells, zero-initial tape and the pinned
+interpreter's zero-byte EOF. Macros may use all eight commands and
+nested balanced loops but must stay inside W logical cells, and moving
+loops are not accepted.
+
+A source-length DP chooses the best division of identical adjacent
+calls into count records (1..255), using the actual unary count
+constructor cost and entire record width. Dictionary definitions are
+deduplicated and unused definitions removed. Two candidate orderings
+are tried: call frequency and RUN-record frequency. For a fixed
+segmentation, descending frequency minimizes the numeric ID
+constructor cost; the portfolio evaluates the complete BF source of
+each resulting variant. These choices are not claimed to achieve the
+globally shortest grammar.
+
+**Before any GitHub commit**, an isolated local verifier passed
+256 full-state differential cases and explicit constructor-length
+identities for dictionary sizes 1,2,5,16,64,128. It exercises
+all 8 BF commands within supported bounded balanced macros,
+non-adjacent symbol call orders, repeated calls including counts 255
+and 256, and dictionary deduplication.
+
+Representative synthetic examples (full emitted BF chars):
+
+* 2-cell, 3-macro, 128 arbitrary calls: earlier one-hot example
+  34,850 -> 1,909, already proved in the prior section.
+* 2-cell, 2 effective macros, 255 identical calls on a long macro:
+  **14,025 -> 123** via a single counted RUN record after
+  dictionary normalization; literal program and VM include their
+  complete output/tape state.
+* 1-cell dictionary with 12 distinct balanced macro definitions
+  and 256 randomly distributed calls: original 25,767; original-ID
+  one-hot 5,571; original-ID numeric 4,670; frequency-reordered
+  numeric **4,520** (synthetic deterministic sample).
+
+These numbers are limited to the macro-dictionary-friendly synthetic
+test family; **nothing here proves 10x on the seven real compiler
+artifacts**. A meaningful remaining bottleneck is *nested grammar
+rules and relational parameter decoding*, since even a compact
+one-level record per semantic token far exceeds the 206,632-source
+character target at roughly 109k semantic tokens. Complete grammar
+execution must reduce the number of runtime call records, not merely
+their width.

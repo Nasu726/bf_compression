@@ -1,0 +1,33 @@
+name: threaded-grammar-portfolio
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/threaded_grammar_portfolio.py'
+      - 'experiments/verify_threaded_grammar_portfolio.py'
+      - 'experiments/threaded_window_macro_vm.py'
+      - '.github/workflows/threaded-grammar-portfolio.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Verify runnable numeric and counted grammar portfolio
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_threaded_grammar_portfolio.py
