@@ -31,7 +31,9 @@ def verify(body: str, counts: tuple[int, ...], start: int = 0):
     )
     assert actual.pointer == 0
     assert all(v == 0 for v in actual.memory[1:])
-    # The nested construction is exact but not necessarily worthwhile for\n    # small counts. The costed portfolio must reject longer candidates.\n    return len(literal), len(compressed)
+    # Some nested encodings are longer than the literal for small counts.
+    # Exactness is independent of profitability.
+    return len(literal), len(compressed)
 
 
 def main():
