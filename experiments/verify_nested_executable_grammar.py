@@ -69,11 +69,14 @@ def main():
     for n in (2, 3, 8, 16, 100, 200, 255, 256, 289, 511, 1024, 65025):
         compiled, factors = best_two_level("+.", n)
         assert repetitions(factors) == n
+        valid = ([(n,)] if n <= 255 else []) + [
+            (a, n // a)
+            for a in range(2, 256)
+            if n % a == 0 and 2 <= n // a <= 255
+        ]
         assert len(compiled) == min(
-            [len(nested_run("+.", (n,)))] if n <= 255 else []
-            + [len(nested_run("+.", (a, n // a))) for a in range(2, 256) if n % a == 0 and 2 <= n // a <= 255]
-        ) if False else True
-        # The optimizer itself enumerates and compares every admissible factor.
+            len(nested_run("+.", tuple(factor))) for factor in valid
+        ), (n, factors)
         assert compiled == nested_run("+.", factors)
     print("two-level exact factor cost selection: ok")
 
