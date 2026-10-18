@@ -845,3 +845,79 @@ one-level record per semantic token far exceeds the 206,632-source
 character target at roughly 109k semantic tokens. Complete grammar
 execution must reduce the number of runtime call records, not merely
 their width.
+
+
+## 2026-10-18 — Actual standard-BF hierarchical RUN record constructor
+
+Added a **runnable** hierarchical grammar-constructor proof-of-concept:
+`threaded_hierarchical_grammar.py`, `mine_hierarchical_call_runs.py`
+and paired verifiers. These are for balanced terminal macros confined to
+a known W-cell tape window, 8-bit wrap and zero-on-EOF. Source includes
+the constructor, real macro executor, data propagation, and scratch cleanup.
+
+A grammar comprises `Call(i)`, `Seq(...)`, `Run(child,k)` for
+1<=k<=255, and acyclic named `Ref` nodes. Named definitions are currently
+**inlined at compile time**. This therefore does NOT provide true DAG
+nonterminal-body sharing across distinct references; that requires an
+additional rule dispatcher/stack interpreter. Nevertheless `Run` is
+*not* expanded: the BF constructor itself loops across moving records.
+
+For grammar nesting depth D, physical record stride is W+4+D,
+comprising W logical data cells, numeric terminal opcode Q, two opcode-test
+scratch cells, D moving repeat counters, and one live flag. The constructor
+emits records **in reverse execution order**. A single `Call` emits an
+opcode/live record, destructively moves every active repeat counter
+forward one record, and advances the construction cursor. The generated
+standard BF `[...]` loop for a `Run` tests its counter in the *new*
+record after each child invocation. This enables an arbitrarily long
+generated call stream without unrolling the loop source. After generation
+the existing shared terminal-macro dispatcher executes the records from
+right to left and transfers every logical data byte toward cell 0.
+All generated counters, records and intermediate values are zero on exit.
+
+Offline full-tape differential checks passed **471 varied grammar cases**
+plus an actual execution of **4,096 nested repeated calls**; all output,
+input consumption, final pointer and memory bytes match literal expansion.
+The CI separately confirms these numbers.
+
+Representative **complete executable BF source lengths** with provided
+hand-designed grammars:
+
+| Window W | Macro calls | Literal source | Hierarchical BF |
+| ---: | ---: | ---: | ---: |
+| 1 | 768 | 2,304 | 464 |
+| 2 | 768 | 3,840 | 542 |
+| 3 | 768 | 7,936 | 634 |
+| 1 | 195,075 | 585,225 | 434 |
+| 2 | 195,075 | 975,375 | 512 |
+| 3 | 195,075 | 2,015,775 | 604 |
+
+The 195,075-call rows are **source-size measurements**; they were not
+fully runtime-executed at that scale. They demonstrate that nested runtime
+record construction decouples source length from the repetition count in
+structured programs, not that real compiler BF has this grammar.
+
+The second module `mine_hierarchical_call_runs.py` automatically finds
+periodic segments of an arbitrary supplied terminal-call stream and uses
+source-cost DP to select literal calls or non-overlapping bounded RUNs,
+with period <= a user-chosen cap and count <=255. In a fixed depth-one
+representation this is an exact DP for the specified decomposition grammar.
+The final selector additionally compares the **complete depth-zero
+no-RUN BF**, because the added moving-counter cell can make any tiny RUN
+more expensive. This fixed-overhead correction was validated by 254
+exhaustive short call-stream enumerations and 435 full-state differential
+cases.
+
+For example, with W=2 and supplied three-macro periodic call stream:
+1,023 calls => literal 5,115 BF chars, flat numeric VM 8,374,
+**automatically inferred hierarchical program 622 chars**.
+Smaller streams correctly fall back to literal or flat encoding.
+
+**Open obligations for the actual seven compiler artifacts:**
+(a) recognize semantic terminal calls preserving a suitable bounded
+window; (b) share named nonterminal rule bodies without compile-time
+inlining (actual DAG grammar walker); (c) recover affine/relational
+parameters at runtime; (d) support moving loops and large tape state,
+arbitrary final pointer, and dynamic I/O; (e) verify source-size and
+complete equivalence on each pinned benchmark. This proof-of-concept is
+not a demonstrated 10x compression of the pinned 2,066,322-char suite.

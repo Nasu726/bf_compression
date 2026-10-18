@@ -1,0 +1,39 @@
+name: hierarchical-grammar-bf
+
+on:
+  pull_request:
+    paths:
+      - 'experiments/threaded_hierarchical_grammar.py'
+      - 'experiments/verify_threaded_hierarchical_grammar.py'
+      - 'experiments/mine_hierarchical_call_runs.py'
+      - 'experiments/verify_mine_hierarchical_call_runs.py'
+      - 'experiments/threaded_grammar_portfolio.py'
+      - '.github/workflows/hierarchical-grammar-bf.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/checkout@v4
+        with:
+          repository: Nasu726/Python_to_BF_Translator
+          ref: 6dcc60c1d38b92be901acc4383a158d254c1ecda
+          path: translator
+      - name: Full-tape verified nested RUN compiler and shared dictionary
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_threaded_hierarchical_grammar.py
+      - name: Cost-optimal bounded periodic RUN extraction
+        env:
+          PYTHONPATH: translator/pybf:experiments
+        run: python experiments/verify_mine_hierarchical_call_runs.py
