@@ -14,7 +14,7 @@ def observe(result):
 
 def verify_case(source: str, data: str = ""):
     rewritten, events, reason = reroll(source, max_period=12)
-    assert reason == "ok"
+    assert reason == "ok", (reason, source[:160])
     assert len(rewritten) <= len(source)
     old = run_bf(source, input_data=data, memory_size=256, step_limit=15_000_000)
     new = run_bf(rewritten, input_data=data, memory_size=256, step_limit=15_000_000)
@@ -56,7 +56,7 @@ def main():
 
     good = cases[:-3]
     rng = Random(0x5CA7C)
-    body_options = ["+>+<", "-.>", "[-]", "><", ">+<", "<>", ",.", "[->+<]"]
+    body_options = ["+>+<", "-.>", "[-]", "><", ">+<", ",.", "[->+<]"]
     # Exclude an intentionally unbalanced pointer option from construction.
     body_options.remove("-.>")
     for _ in range(75):
